@@ -1,0 +1,490 @@
+.panel {
+  overflow: hidden;
+  border: 1px solid #e4e9e2;
+  border-radius: 22px;
+  background: #fff;
+  box-shadow: 0 7px 24px #193d2d05;
+  color: #193f31;
+}
+.viewport {
+  position: relative;
+  min-height: 440px;
+  background: #e8f0e8;
+  isolation: isolate;
+}
+.canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+}
+.illustration {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: #e8efe7 url("/images/landscape.svg") center/cover no-repeat;
+  text-align: center;
+  z-index: 1;
+}
+.illustration:after {
+  position: absolute;
+  inset: 0;
+  content: "";
+  background: linear-gradient(
+    180deg,
+    #edf3e831 0%,
+    #eaf0e120 52%,
+    #dbe7da40 100%
+  );
+  z-index: -1;
+}
+.eyebrow {
+  font-size: 10px;
+  letter-spacing: 0.28em;
+  font-weight: 700;
+  color: #335c49;
+  position: absolute;
+  top: 114px;
+}
+.landscapeLabel {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  position: absolute;
+  top: 145px;
+  color: #294c37;
+  text-shadow: 0 1px 12px #fff9;
+}
+.landscapeLabel span {
+  font-size: 16px;
+  font-weight: 500;
+  letter-spacing: 0.05em;
+}
+.landscapeLabel strong {
+  font-size: 30px;
+  font-weight: 650;
+  letter-spacing: -0.06em;
+}
+.illustrationCaption {
+  position: absolute;
+  bottom: 15px;
+  font-size: 10px;
+  color: #354f3e;
+  background: #f7faf3d9;
+  border-radius: 12px;
+  padding: 5px 9px;
+}
+.topline {
+  position: absolute;
+  top: 20px;
+  left: 20px;
+  right: 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
+  z-index: 3;
+  pointer-events: none;
+}
+.statusPill,
+.routePill {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  background: #fffffff2;
+  border: 1px solid #ffffff8c;
+  border-radius: 30px;
+  padding: 9px 12px;
+  color: #244735;
+  font-size: 11px;
+  font-weight: 700;
+  box-shadow: 0 2px 8px #234d3310;
+}
+.statusPill i {
+  width: 6px;
+  height: 6px;
+  background: #3b7955;
+  border-radius: 50%;
+}
+.routePill {
+  background: #284f3ee8;
+  color: white;
+  font-weight: 500;
+}
+.notice {
+  position: absolute;
+  left: 24px;
+  right: 24px;
+  bottom: 50px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 17px 18px;
+  background: #fffffff0;
+  border: 1px solid #fff;
+  border-radius: 14px;
+  box-shadow: 0 5px 25px #3454380b;
+  z-index: 3;
+  backdrop-filter: blur(9px);
+}
+.noticeIcon {
+  width: 35px;
+  height: 35px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: #edf3eb;
+  flex-shrink: 0;
+  color: #527151;
+}
+.noticeIcon svg {
+  width: 21px;
+  height: 21px;
+}
+.notice strong {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+}
+.notice p {
+  font-size: 11px;
+  color: #637268;
+  margin: 6px 0 0;
+  line-height: 1.7;
+  word-break: keep-all;
+}
+.tools {
+  position: absolute;
+  right: 18px;
+  top: 77px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  z-index: 3;
+}
+.tools button {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border: 1px solid #dce3dc;
+  background: #fff;
+  border-radius: 9px;
+  color: #36553f;
+  font-size: 22px;
+  box-shadow: 0 2px 5px #263d3010;
+  cursor: pointer;
+}
+.tools button:disabled {
+  opacity: 0.5;
+  cursor: wait;
+}
+.tools svg {
+  width: 20px;
+  height: 20px;
+}
+.userLocation {
+  display: flex;
+  align-items: center;
+  flex-direction: column;
+  gap: 6px;
+  color: #255fb1;
+  font-size: 11px;
+  font-weight: 700;
+  text-shadow:
+    0 1px 2px white,
+    0 -1px 2px white;
+  white-space: nowrap;
+  pointer-events: none;
+  transform: translateY(-10px);
+}
+.userLocation:before {
+  content: "";
+  width: 14px;
+  height: 14px;
+  background: #377fd1;
+  border: 3px solid white;
+  border-radius: 50%;
+  box-shadow:
+    0 0 0 6px #5a9bdf33,
+    0 2px 5px #224a7422;
+}
+.searchNotice {
+  position: absolute;
+  bottom: 18px;
+  left: 18px;
+  right: 18px;
+  border: 1px solid #e6e7dd;
+  background: #fffffff2;
+  border-radius: 10px;
+  padding: 12px 14px;
+  font-size: 11px;
+  color: #5d6454;
+  z-index: 3;
+  line-height: 1.65;
+  word-break: keep-all;
+}
+.selectedCard {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  padding: 20px 22px;
+  border-bottom: 1px solid #eef0e9;
+}
+.placeIndex {
+  width: 42px;
+  height: 45px;
+  border: 1px solid #dfe7d9;
+  border-radius: 12px;
+  background: #f0f4e9;
+  color: #536b3b;
+  display: grid;
+  place-items: center;
+  font-size: 18px;
+  font-weight: 600;
+  flex-shrink: 0;
+  font-family: Georgia, serif;
+}
+.placeSummary {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+  flex: 1;
+}
+.placeSummary > span {
+  font-size: 10px;
+  color: #728267;
+  font-weight: 600;
+}
+.placeSummary strong {
+  font-size: 15px;
+  line-height: 1.4;
+  letter-spacing: -0.035em;
+}
+.placeSummary p {
+  font-size: 10px;
+  color: #8b9185;
+  margin: 0;
+}
+.detailButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  border: 0;
+  background: #f1f4ee;
+  color: #3c5942;
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 11px;
+  white-space: nowrap;
+  cursor: pointer;
+  font-weight: 600;
+}
+.footer {
+  padding: 15px 22px;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 10px;
+  color: #8b9489;
+  line-height: 1.6;
+}
+.footer > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.footer a {
+  color: #42624a;
+  text-decoration: none;
+  white-space: nowrap;
+  font-weight: 600;
+}
+.legendDot {
+  width: 5px;
+  height: 5px;
+  display: inline-block;
+  background: #90a17e;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.settings,
+.searchResults {
+  border-top: 1px solid #edf0e9;
+  color: #74816f;
+  font-size: 11px;
+}
+.settings summary,
+.searchResults summary {
+  cursor: pointer;
+  padding: 13px 22px;
+  list-style-position: inside;
+  font-size: 10px;
+}
+.settings form {
+  padding: 0 22px 19px;
+}
+.settings label {
+  display: block;
+  color: #36553d;
+  font-size: 12px;
+  font-weight: 600;
+  margin-top: 4px;
+}
+.settings p {
+  font-size: 11px;
+  line-height: 1.7;
+  margin: 7px 0 10px;
+  word-break: keep-all;
+}
+.keyInput {
+  display: flex;
+  gap: 7px;
+}
+.keyInput input {
+  min-width: 0;
+  flex: 1;
+  border: 1px solid #dbe4d7;
+  padding: 10px;
+  border-radius: 7px;
+  background: #fcfdf9;
+  color: #35563b;
+  font-size: 11px;
+}
+.keyInput button {
+  border: 0;
+  background: #2e5541;
+  color: white;
+  border-radius: 7px;
+  padding: 8px 14px;
+  font-size: 11px;
+  cursor: pointer;
+}
+.settingsLinks {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 12px;
+  font-size: 10px;
+}
+.settingsLinks a {
+  color: #4f6f51;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.settingsLinks button {
+  border: 0;
+  background: none;
+  color: #839079;
+  font-size: 10px;
+  cursor: pointer;
+  padding: 0;
+}
+.positionMessage {
+  margin: 0;
+  background: #f3f6ee;
+  color: #687959;
+  font-size: 11px;
+  line-height: 1.7;
+  padding: 12px 22px;
+}
+.searchResults ul {
+  margin: 0;
+  padding: 0 22px 16px;
+  list-style: none;
+  display: grid;
+  gap: 12px;
+}
+.searchResults li {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.searchResults a {
+  color: #42644c;
+  text-decoration: none;
+  font-size: 11px;
+  font-weight: 600;
+}
+.searchResults li > span {
+  color: #8a9285;
+  font-size: 10px;
+}
+.panel button:focus-visible,
+.panel summary:focus-visible,
+.panel a:focus-visible,
+.panel input:focus-visible {
+  outline: 3px solid #a1bc80;
+  outline-offset: 3px;
+}
+@media (min-width: 1100px) {
+  .viewport {
+    min-height: 485px;
+  }
+  .eyebrow {
+    top: 128px;
+  }
+  .landscapeLabel {
+    top: 159px;
+  }
+}
+@media (max-width: 600px) {
+  .viewport {
+    min-height: 390px;
+  }
+  .topline {
+    top: 15px;
+    left: 15px;
+    right: 15px;
+  }
+  .eyebrow {
+    top: 100px;
+  }
+  .landscapeLabel {
+    top: 129px;
+  }
+  .landscapeLabel strong {
+    font-size: 27px;
+  }
+  .notice {
+    left: 15px;
+    right: 15px;
+    padding: 14px;
+    bottom: 46px;
+  }
+  .notice p {
+    font-size: 10px;
+  }
+  .selectedCard {
+    padding: 17px 15px;
+    gap: 10px;
+  }
+  .placeSummary strong {
+    font-size: 13px;
+  }
+  .detailButton {
+    padding: 9px;
+    font-size: 10px;
+  }
+  .footer {
+    padding: 13px 15px;
+    font-size: 9px;
+    flex-wrap: wrap;
+  }
+  .settings summary,
+  .searchResults summary {
+    padding: 12px 15px;
+  }
+  .settings form {
+    padding: 0 15px 16px;
+  }
+  .settingsLinks {
+    flex-wrap: wrap;
+  }
+}
