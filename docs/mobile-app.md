@@ -1,0 +1,129 @@
+# iPhone 앱
+
+2026-10-23 사용자 요청에 따라 현재 개발·검증·배포 대상은 **iPhone(iOS)만**입니다. Android 프로젝트와 관련 설명은 이전 구현 기록으로 보관합니다. 현재 작업을 위해 Android 도구를 설치하거나 APK를 빌드할 필요는 없습니다.
+
+이 프로젝트는 Capacitor 8 네이티브 프로젝트를 포함합니다. `out`의 정적 앱 자산을 앱 안에 복사하며 원격 사이트 URL을 앱의 시작 화면으로 열지 않습니다. 네이버 지도 타일과 외부 관광 안내에는 인터넷 연결이 필요합니다.
+
+## 화면 전체 지도 변경 — 2026-10-23
+
+사용자의 가로·세로 전체 지도 요청에 따라 네이티브 `NMFMapView`를 투명 `WKWebView` 아래에 배치합니다. 웹 UI는 간결한 상단 검색·필터와 하단 카드·메뉴로 지도 위에 표시합니다. 웹 컨트롤의 터치는 WebView가 받고, 그 밖의 터치는 네이티브 지도로 전달합니다. 모달·패널·입력 중에는 지도 배경을 유지하면서 지도 조작을 막습니다.
+
+이 레이아웃의 **44개 테스트·타입·린트·Next.js 빌드·iOS 동기화·Xcode 빌드·시뮬레이터 설치가 통과**했습니다. 최종 배치 수정 후 Swift 빌드·업데이트 설치를 완료했고 iPhone 17 Pro / iOS 26.5에서 상태 표시줄 뒤부터 하단 끝까지 실제 지도 타일·3개 마커가 채워지는 것을 확인했습니다. 검색·필터·미션·하단 카드·탭이 지도 위에 표시되고, 확대축소 버튼은 사진 미션과 분리해 왼쪽에 배치했습니다. 네이버 로고와 축척도 겹치지 않습니다. [최종 전체 화면 지도 캡처](ios-fullscreen-map.png)는 시뮬레이터의 실제 실행 화면이며 실제 iPhone 사진은 아닙니다.
+
+좌표 터치 도구의 `noWindowsAvailable` 오류는 재설정 후에도 발생해 지도 드래그·웹 UI 터치·마커 → 미션 흐름의 검증은 완료하지 못했습니다. 아래는 변경 전 SDK 연결 결과입니다.
+
+## 지도 SDK 연결 — 2026-10-23, 전체 화면 변경 전
+
+제공받은 네이버 Maps Client ID를 Git 제외 `.env.local`에 적용했고 브라우저에서 실제 지도 타일 표시를 확인했습니다. Ncloud에는 Dynamic Map, 개발용 Web 서비스 URL 두 개와 iOS Bundle ID `kr.bangucheon.passport`가 등록되어 있습니다. 키 값은 문서나 로그에 기록하지 않습니다.
+
+기존 iOS WebView의 JavaScript 지도 SDK는 `capacitor://` 환경에서 HTTP 하위 요청을 선택해 ATS의 `-1022` 오류로 차단됐습니다. **공식 iOS NMapsMap 3.24.0 SDK를 Swift Package Manager와 Capacitor 브리지로 통합**했고, iPhone 17 Pro / iOS 26.5 시뮬레이터에서 인증·실제 도로와 하천 타일·공식 마커 3개·유산 위치 보조 설명을 확인했습니다. SDK 축소 버튼으로 축척 200m → 500m 변경도 확인했습니다. `capacitor://` Web 서비스 URL을 추가 저장하거나 ATS를 완화하지 않았습니다. [네이버 지도 설정](map-setup.md)에 환경별 구조를 정리했습니다.
+
+당시 통합 소스의 **43개 테스트·타입·린트·Next.js 정적 빌드·iOS 동기화·Xcode 빌드가 통과**했습니다. 초기 줌 13.5 조정까지 포함한 앱을 설치·실행해 타일과 3개 마커 표시를 확인했습니다. 앱 origin·기존 저장소를 유지했고 수집 배지 1개가 남아 있습니다. [SDK 연결 당시 지도 캡처](ios-naver-map.png)는 전체 화면 변경 전 Device Hub 시뮬레이터 화면이며 실제 iPhone 사진이 아닙니다.
+
+당시 좌표 터치 도구의 `noWindowsAvailable` 오류로 마커 터치 → 미션·모달 흐름 검증은 미완료입니다. 새 구조의 지도·웹 UI 터치 분리와 모달 중 지도 상호작용 차단을 별도로 확인해야 합니다. 실제 iPhone 카메라·QR 스캔·GPS·OS 공유와 반복 재실행도 추가 검증 대상입니다.
+
+## 이전 앱 검증 — 2026-10-22
+
+아래 결과는 지도 키 적용 전 앱의 기록이며, 새 네이티브 지도 SDK의 성공을 의미하지 않습니다.
+
+- iOS: 당시 지도·게임 UI와 플러그인 6개를 포함한 시뮬레이터용 앱을 Xcode 27.1에서 빌드했고(`BUILD SUCCEEDED`), iOS 26.5의 iPhone 17 Pro 시뮬레이터에 설치했습니다. Device Hub에서 앱 아이콘으로 실행해 지도 메인 화면이 표시되는 것을 확인했습니다. 앱 홈화면 표시명은 **반구천 탐험지도**입니다.
+- Android 이전 이력: 패키지 `kr.bangucheon.passport`, Android 8.0(API 26) 이상, target/compile SDK 36으로 프로젝트를 생성했습니다. Java·Android SDK·Android Studio 부재로 APK 빌드는 수행하지 않았습니다. 현재 작업에서는 변경·검증하지 않습니다.
+- 카메라 촬영·QR 스캔·현재 위치·파일 내보내기에 공식 Capacitor 플러그인을 연결했습니다. 실제 휴대폰 카메라, 현장 QR, GPS, 지도 인증 성공은 실제 기기에서 별도로 검증해야 합니다.
+- 당시 `out/index.html`, 두 플랫폼에 복사한 번들, iOS `.app` 내부 파일의 SHA-256이 동일함을 확인했습니다. 네이티브 설정에 원격 시작 URL은 없습니다.
+- Apple 개발자 계정·서명·프로비저닝은 설정하지 않았습니다. iOS 시뮬레이터 앱은 iPhone에 설치하는 IPA가 아닙니다. Google Play 배포는 현재 범위 밖입니다.
+
+## 준비와 동기화
+
+설치된 **Node.js 24 LTS와 pnpm 12.15.0**을 기준으로 합니다. 저장소의 `packageManager`도 `pnpm@12.15.0`입니다. Node·pnpm이 PATH에서 실행되어야 합니다.
+
+```bash
+pnpm install --frozen-lockfile
+cp -n .env.example .env.local
+# 새 환경에서만 .env.local에 네이버 Maps Client ID 입력
+pnpm mobile:sync
+```
+
+현재 작업 폴더의 `.env.local`에는 제공받은 ID가 이미 설정되어 있으므로 덮어쓰지 않습니다. 공개 Client ID는 빌드된 앱에 포함되며 Client Secret은 사용하지 않습니다.
+
+`mobile:sync`는 `mobile:sync:ios`를 실행하며 **Next.js 정적 빌드 후 iOS에만** 최신 자산과 플러그인을 복사합니다. `pnpm build` → `pnpm exec cap sync ios`와 같습니다. 화면·콘텐츠·환경변수를 수정한 뒤 앱을 다시 빌드하기 전에 실행하세요. 다른 환경에서 ID가 없으면 지도 연결 안내를 표시하며 장소·미션·기록은 이용할 수 있습니다.
+
+## iPhone
+
+Xcode 26 이상이 필요합니다. Swift Package Manager를 사용하므로 CocoaPods 설치는 필요하지 않습니다.
+
+```bash
+pnpm mobile:ios
+```
+
+Xcode에서 `App` scheme과 연결한 iPhone 또는 iPhone 시뮬레이터를 선택하고 Run을 누릅니다. 실제 iPhone에는 본인의 Apple 개발 팀 선택·서명과 기기의 개발자 모드가 필요합니다. 이 프로젝트는 개발 팀을 임의로 지정하지 않습니다. 앱 ID는 `kr.bangucheon.passport`이며 공개 배포 전 소유한 식별자로 확정하세요.
+
+명령행에서 실행하려면 iOS 동기화 후 `pnpm exec cap run ios`로 대상을 선택합니다. Bundle ID를 변경하면 Ncloud의 iOS 서비스 환경도 동일하게 변경해야 합니다.
+
+### 네이버 네이티브 지도 구성
+
+공식 [`navermaps/SPM-NMapsMap`](https://github.com/navermaps/SPM-NMapsMap)의 **3.24.0**을 정확한 버전으로 지정했으며 `NMapsGeometry` **1.0.2**가 함께 해석됐습니다. 의존성은 앱 수준 Xcode 프로젝트에 등록해 `cap sync ios`가 생성하는 `CapApp-SPM`을 직접 수정하지 않습니다. SDK 바이너리는 Swift Package Manager가 내려받아 체크섬을 검증하며 저장소에 복사하지 않습니다.
+
+| 파일 | 역할 |
+| --- | --- |
+| `ios/App/App.xcodeproj/project.pbxproj` | 앱 대상의 공식 NMapsMap Swift Package 의존성 |
+| `ios/App/App.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved` | 해석된 SDK 버전 고정 |
+| `ios/App/App/NaverNativeMapPlugin.swift` | 화면 전체 `NMFMapView` 배경·마커·인증·컨트롤 여백·상호작용을 제공하는 Capacitor 플러그인 |
+| `ios/App/App/MainViewController.swift` | 투명 `MapOverlayWebView` 생성·`hitTest` 터치 분리·지도 플러그인 등록 |
+| `ios/App/App/SceneDelegate.swift`, `Base.lproj/Main.storyboard` | 앱의 한 WebView와 지도 브리지를 초기화하는 화면 진입점 |
+| `src/lib/native-naver-map.ts` | TypeScript 브리지·호출 순서·전체 지도 크기·웹 터치 영역·컨트롤 여백 계산 |
+| `src/components/native-tourism-map.tsx` | iOS 지도와 장소 선택·화면 전환을 연결하는 React 컴포넌트 |
+
+공개 Client ID는 웹 번들의 설정에서 `create({ clientId, ... })`로 전달합니다. Swift는 신규 Maps 인증용 `NMFNcpKeyClient(ncpKeyId: clientId, beta: false)`를 사용합니다. Client Secret이나 실제 ID를 Swift 소스·Info.plist에 하드코딩하지 않습니다. Naver 로고·저작권 컨트롤은 SDK가 제공하는 표시를 유지하며, 위치는 앱의 명시적인 버튼에서만 요청합니다.
+
+SDK 연결 당시 앱의 인증·타일·마커·축소를 확인했고, 새 전체 화면 배경과 투명 WebView 통합 후에는 최종 빌드·설치·화면 채움·컨트롤 배치도 확인했습니다. 지도·웹 UI 터치 검증의 남은 범위는 [구현 현황](implementation-status.md)을 따릅니다.
+
+이 작업 환경의 **Xcode 27.1**에서는 시뮬레이터 화면을 **Device Hub**에서 엽니다. 확인한 앱 경로는 `/Applications/Xcode.app/Contents/Applications/DeviceHub.app`이고, 앱 식별자는 `com.apple.dt.Devices`입니다. Device Hub에서 iOS 26.5의 iPhone 17 Pro를 선택하고 홈 화면의 **반구천 탐험지도** 아이콘을 누릅니다. 예전 Xcode에서 사용한 `Contents/Developer/Applications/Simulator.app` 경로는 이 설치에 존재하지 않습니다.
+
+시뮬레이터용 명령행 빌드:
+
+```bash
+pnpm mobile:ios:build
+```
+
+결과: `.native-build/ios/Build/Products/Debug-iphonesimulator/App.app`
+
+시뮬레이터에는 실제 카메라가 없습니다. QR 스캔·암각화 촬영 미션은 iPhone에서 확인해야 합니다. 사진을 저장했다고 그림의 종류가 자동 인식·검증되는 것은 아닙니다.
+
+10월 22일 검증 중 최초 진입에 검은 화면을 한 번 관찰했으며, 홈 화면으로 돌아갔다 앱을 다시 열자 정상 표시됐습니다. 원인은 확정하지 않았고 이번 ATS 지도 오류와 같은 원인이라고 단정하지 않습니다. 당시 로컬 웹 서버를 중지하고 앱을 완전히 종료한 뒤 홈 화면 아이콘으로 다시 실행하자 지도 메인이 즉시 표시됐습니다. 80 XP·스탬프 1개·완료 미션 1개·수집 카드 1개도 유지돼, 번들 앱의 독립 실행과 종료 후 기록 보존을 확인했습니다. 새 지도 SDK와 실제 기기에서의 반복 재실행 검증은 별도로 필요합니다.
+
+## Android 이전 구현 기록 — 현재 작업 제외
+
+아래는 기존 프로젝트를 나중에 다시 사용할 때의 참고입니다. 현재 iPhone 작업에서는 Android 도구 설치·동기화·빌드를 수행하지 않습니다.
+
+[Android Studio](https://developer.android.com/studio)와 JDK 21, Android SDK Platform 36·Build Tools·Platform Tools를 준비하세요. SDK 다운로드에 필요한 이용약관은 설치자가 검토하고 동의해야 합니다. 이 작업에서는 동의를 대행하지 않았습니다.
+
+```bash
+pnpm mobile:android
+```
+
+Android Studio에서 SDK를 설정하고 기기 또는 에뮬레이터를 선택한 뒤 Run을 누릅니다. SDK 경로를 인식하지 못하면 로컬 `android/local.properties`에 `sdk.dir`을 설정합니다. 이 파일은 Git에서 제외됩니다.
+
+```bash
+pnpm mobile:android:build
+```
+
+성공 시 결과: `android/app/build/outputs/apk/debug/app-debug.apk`. 개발용 APK이며 Google Play 업로드용 서명 AAB와는 다릅니다. Gradle Wrapper 8.14.3과 Android Gradle Plugin 8.13.0을 사용합니다.
+
+## 권한과 데이터
+
+- QR 버튼·사진 촬영 버튼을 눌렀을 때만 카메라를 엽니다. 앱 시작 시 카메라 권한을 요청하지 않습니다.
+- 내 위치 버튼을 눌렀을 때만 위치를 한 번 읽습니다. 백그라운드 위치 추적은 구현하지 않았습니다.
+- 기존 Android 구현에는 열린 미션·패널을 먼저 닫는 시스템 뒤로가기 처리가 있습니다. 현재 iPhone 검증 대상은 아닙니다.
+- 카메라 사진은 최대 1600px로 받아 앱의 로컬 기록에 저장합니다. 사진 보관함에 자동 저장하거나 서버로 전송하지 않습니다.
+- 기록 내보내기는 휴대폰의 공유 시트를 엽니다. 공유 대상을 사용자가 선택하며, 공유 종료 뒤 임시 JSON 파일은 삭제를 시도합니다. 외부에 저장한 파일은 앱 기록 삭제와 별개입니다.
+- 앱 삭제·앱 데이터 초기화 시 해당 앱에 저장한 탐험 기록이 사라집니다. 계정 동기화는 없습니다.
+- iOS 카메라·사진·위치 설명 및 Filesystem의 파일 타임스탬프 사용 이유를 네이티브 프로젝트에 포함했습니다. 스토어 제출 전 실제 데이터 처리와 SDK 설정을 기준으로 개인정보 고지를 최종 검토해야 합니다.
+
+## 공식 기술 근거
+
+- [Capacitor 설치 환경](https://capacitorjs.com/docs/getting-started/environment-setup)
+- [iOS Swift Package Manager](https://capacitorjs.com/docs/ios/spm)
+- [Naver Maps 공식 Swift Package](https://github.com/navermaps/SPM-NMapsMap), [지도 생성](https://navermaps.github.io/ios-map-sdk/guide-ko/2-1.html), [NMFAuthManager 인증](https://navermaps.github.io/ios-map-sdk/reference/Classes/NMFAuthManager.html)
+- [Camera](https://capacitorjs.com/docs/apis/camera), [Barcode Scanner](https://capacitorjs.com/docs/apis/barcode-scanner), [Geolocation](https://capacitorjs.com/docs/apis/geolocation)
+- [Filesystem](https://capacitorjs.com/docs/apis/filesystem), [Share](https://capacitorjs.com/docs/apis/share)
+- [App: Android 뒤로가기](https://capacitorjs.com/docs/apis/app)

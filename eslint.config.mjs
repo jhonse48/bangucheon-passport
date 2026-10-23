@@ -5,5 +5,13 @@ export default defineConfig([
   ...nextVitals,
   ...nextTs,
   { rules: { "@next/next/no-img-element": "off" } },
-  globalIgnores([".next/**", "out/**", ".sites-runtime/**", ".openai/**"]),
+  globalIgnores([
+    ".next/**",
+    "out/**",
+    ".sites-runtime/**",
+    ".openai/**",
+    "ios/**",
+    "android/**",
+    ".native-build/**",
+  ]),
 ]);

@@ -7,3 +7,11 @@ out/
 .sites-runtime/
 .DS_Store
 test-results/
+.native-build/
+*.ipa
+*.apk
+*.aab
+*.p12
+*.mobileprovision
+*.jks
+*.keystore

@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">반구천 탐험지도</string>
+    <string name="title_activity_main">반구천 탐험지도</string>
+    <string name="package_name">kr.bangucheon.passport</string>
+    <string name="custom_url_scheme">kr.bangucheon.passport</string>
+</resources>
