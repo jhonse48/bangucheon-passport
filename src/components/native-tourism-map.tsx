@@ -5,8 +5,9 @@ import type { FormEvent } from 'react';
 import type { PluginListenerHandle } from '@capacitor/core';
 import { ExternalLink, LocateFixed, MapPin, RotateCcw, Settings2, X } from 'lucide-react';
 import { getCurrentPosition } from '@/lib/native-device';
-import { getMapAnchor, mapAnchorLabel, naverSearchUrl, REGION_MAP_REFERENCE, validMapPosition } from '@/lib/naver-map';
-import { nativeMapLayout, NaverNativeMap, runNativeMapTask } from '@/lib/native-naver-map';
+import { getMapAnchor, getMapRoute, journeyMapBounds, journeyMapFocusKey, mapCameraIntent, mapMarkerDetails, mapPoints, mapRouteLine, mapRouteNotice, mapSceneKey, mapAnchorLabel, naverSearchUrl, REGION_MAP_REFERENCE, validMapPosition } from '@/lib/naver-map';
+import { nativeMapLayout, NaverNativeMap, resolveNativeMapSelection, runNativeMapTask } from '@/lib/native-naver-map';
+import type { MapCameraState } from '@/lib/naver-map';
 import type { NativeMapInsetRegion, NativeMapInsets, NativeMapMarker, NativeMapPosition, NativeMapRect } from '@/lib/native-naver-map';
 import type { TourismMapProps } from './tourism-map';
 import styles from './tourism-map.module.css';
@@ -39,7 +40,7 @@ function authMessage(code?: number): string {
   return '네이버 지도에 연결하지 못했습니다. 인터넷 연결과 Maps의 iOS 앱 등록을 확인해 주세요.';
 }
 
-export default function NativeTourismMap({ places, selectedPlaceId, completedPlaceIds = EMPTY_IDS, onSelect, className = '', nativeMapHidden = false }: TourismMapProps) {
+export default function NativeTourismMap({ places, selectedPlaceId, completedPlaceIds = EMPTY_IDS, onSelect, onSelectGroup, className = '', nativeMapHidden = false, route = null, journey, onSelectJourneyPhoto }: TourismMapProps) {
   const key = useSyncExternalStore(subscribeKey, storedKey, () => '');
   const [created, setCreated] = useState(false);
   const [authorized, setAuthorized] = useState(false);
@@ -55,8 +56,17 @@ export default function NativeTourismMap({ places, selectedPlaceId, completedPla
   const settingsRef = useRef<HTMLDialogElement>(null);
   const gpsRequest = useRef(0);
   const onSelectRef = useRef(onSelect);
+  const onSelectGroupRef = useRef(onSelectGroup);
+  const onSelectJourneyPhotoRef = useRef(onSelectJourneyPhoto);
+  const journeyRef = useRef(journey);
+  const journeyFocusKey = journeyMapFocusKey(journey);
   const placesRef = useRef(places);
   const markersRef = useRef<NativeMapMarker[]>([]);
+  const cameraStateRef = useRef<MapCameraState | null>(null);
+  const routeModel = useMemo(() => getMapRoute(route), [route]);
+  const scenePoints = useMemo(() => routeModel?.points.length ? routeModel.points : mapPoints(places), [routeModel, places]);
+  const sceneKey = mapSceneKey(routeModel, scenePoints);
+  const sceneRef = useRef({ points: scenePoints, route: routeModel });
   const selected = places.find((place) => place.id === selectedPlaceId);
   const selectedAnchor = getMapAnchor(selected);
   const ready = created && authorized && !error;
@@ -72,11 +82,11 @@ export default function NativeTourismMap({ places, selectedPlaceId, completedPla
   const markers = useMemo<NativeMapMarker[]>(() => {
     const values = places.flatMap((place) => {
       const anchor = getMapAnchor(place);
-      return anchor ? [{ id: place.id, ...anchor.position, title: place.name, label: place.shortName, kind: anchor.kind, completed: completedPlaceIds.includes(place.id), selected: place.id === selectedPlaceId }] : [];
+      return anchor ? [{ id: place.id, ...anchor.position, title: place.name, label: place.shortName, kind: anchor.kind, approximate: anchor.approximate, number: mapMarkerDetails(place.id, route).number, qrStatus: mapMarkerDetails(place.id, route).qrStatus, completed: completedPlaceIds.includes(place.id), selected: place.id === selectedPlaceId }] : [];
     });
     return location ? [...values, { id: '__current_location', ...location, title: '현재 기기 추정 위치', label: '내 위치', kind: 'location', completed: false, selected: false }] : values;
-  }, [places, selectedPlaceId, completedPlaceIds, location]);
-  useEffect(() => { onSelectRef.current = onSelect; placesRef.current = places; markersRef.current = markers; }, [onSelect, places, markers]);
+  }, [places, selectedPlaceId, completedPlaceIds, location, route]);
+  useEffect(() => { onSelectRef.current = onSelect; onSelectGroupRef.current = onSelectGroup; onSelectJourneyPhotoRef.current = onSelectJourneyPhoto; journeyRef.current = journey; placesRef.current = places; markersRef.current = markers; sceneRef.current = { points: scenePoints, route: routeModel }; }, [onSelect, onSelectGroup, onSelectJourneyPhoto, journey, places, markers, scenePoints, routeModel]);
 
   useEffect(() => {
     if (!key) return;
@@ -90,6 +100,15 @@ export default function NativeTourismMap({ places, selectedPlaceId, completedPla
           const place = placesRef.current.find((item) => item.id === id);
           if (place) onSelectRef.current(place);
         }),
+        NaverNativeMap.addListener('clusterTap', ({ ids }) => {
+          if (disposed) return;
+          const group = resolveNativeMapSelection(placesRef.current, ids);
+          if (group.length > 1 && onSelectGroupRef.current) onSelectGroupRef.current(group);
+          else if (group.length) onSelectRef.current(group[0]);
+        }),
+        NaverNativeMap.addListener('photoTap', ({ id }) => {
+          if (!disposed && journeyRef.current?.photos.some((photo) => photo.id === id)) onSelectJourneyPhotoRef.current?.(id);
+        }),
         NaverNativeMap.addListener('authState', ({ authorized: valid, code }) => {
           if (disposed) return;
           setAuthorized(valid);
@@ -100,7 +119,7 @@ export default function NativeTourismMap({ places, selectedPlaceId, completedPla
       listeners.push(...handles);
       if (disposed) return;
       const initialMarkers = markersRef.current;
-      const placeMarkers = initialMarkers.filter((marker) => marker.kind !== 'location');
+      const placeMarkers = sceneRef.current.points;
       const latitudes = placeMarkers.map((marker) => marker.lat);
       const longitudes = placeMarkers.map((marker) => marker.lng);
       const center = placeMarkers.length ? {
@@ -112,7 +131,9 @@ export default function NativeTourismMap({ places, selectedPlaceId, completedPla
         rect: layout?.rect ?? { x: 0, y: 0, width: 1, height: 1 },
         webTouchRects: layout?.webTouchRects ?? [],
         contentInsets: layout?.contentInsets ?? { top: 0, right: 0, bottom: 0, left: 0 },
-        center, zoom: 13.5, markers: initialMarkers });
+        center, zoom: 13.5, markers: initialMarkers, route: mapRouteLine(sceneRef.current.route), journey: journeyRef.current ?? null,
+        ...(placeMarkers.length > 1 ? { fitBounds: { points: placeMarkers, padding: 48 } } : {}) });
+      cameraStateRef.current = null;
       if (!disposed) setCreated(true);
     }).catch(() => { if (!disposed) setError('iPhone 지도를 준비하지 못했습니다. 앱을 다시 열어 주세요.'); });
     return () => {
@@ -156,7 +177,7 @@ export default function NativeTourismMap({ places, selectedPlaceId, completedPla
       const elements = new Set<Element>(document.querySelectorAll('[data-native-map-occluder],[data-native-map-inset]'));
       if (hostRef.current) elements.add(hostRef.current);
       observed.forEach((element) => { if (!elements.has(element)) { resize.unobserve(element); observed.delete(element); } });
-      elements.forEach((element) => { if (!observed.has(element)) { resize.observe(element); observed.add(element); } });
+      elements.forEach((element) => { if (!observed.has(element)) { resize.observe(element, { box: 'border-box' }); observed.add(element); } });
     };
     observeControls();
     const mutation = new MutationObserver(() => { observeControls(); schedule(); });
@@ -188,15 +209,34 @@ export default function NativeTourismMap({ places, selectedPlaceId, completedPla
     if (created) void runNativeMapTask(() => NaverNativeMap.update({ markers })).catch(() => setError('지도 장소를 갱신하지 못했습니다. 앱을 다시 열어 주세요.'));
   }, [created, markers]);
   useEffect(() => {
+    if (created) void runNativeMapTask(() => NaverNativeMap.update({ route: mapRouteLine(routeModel) }))
+      .catch(() => setError('지도 코스를 갱신하지 못했습니다. 앱을 다시 열어 주세요.'));
+  }, [created, routeModel]);
+  useEffect(() => {
     const request = ++gpsRequest.current;
     if (!created) return;
+    const state = { sceneKey, selectedId: selectedPlaceId };
+    const intent = mapCameraIntent(cameraStateRef.current, state);
+    cameraStateRef.current = state;
     const anchor = getMapAnchor(places.find((place) => place.id === selectedPlaceId));
     void runNativeMapTask(async () => {
       if (request !== gpsRequest.current) return;
       setLocation(null); setLocationMessage(''); setLocating(false);
-      if (anchor) await NaverNativeMap.update({ center: anchor.position });
+      if (intent === 'fit') await NaverNativeMap.update(scenePoints.length > 1
+        ? { fitBounds: { points: scenePoints, padding: 48 } }
+        : { center: scenePoints[0] ?? REGION_MAP_REFERENCE.position, zoom: 14 });
+      else if (intent === 'select' && anchor) await NaverNativeMap.update({ center: anchor.position });
     }).catch(() => undefined);
-  }, [created, selectedPlaceId, places]);
+  }, [created, selectedPlaceId, places, sceneKey, scenePoints]);
+  useEffect(() => {
+    if (created) void runNativeMapTask(() => NaverNativeMap.update({ journey: journey ?? null }))
+      .catch(() => setError('여행 경로를 지도에 표시하지 못했습니다. 앱을 다시 열어 주세요.'));
+  }, [created, journey]);
+  useEffect(() => {
+    if (!created || !journeyFocusKey || !journeyRef.current) return;
+    const points = journeyMapBounds(journeyRef.current);
+    if (points.length) void runNativeMapTask(() => NaverNativeMap.update({ fitBounds: { points, padding: 48 } })).catch(() => undefined);
+  }, [created, journeyFocusKey]);
   useEffect(() => {
     const dialog = settingsRef.current;
     if (settingsOpen) dialog?.showModal(); else dialog?.close();
@@ -222,7 +262,9 @@ export default function NativeTourismMap({ places, selectedPlaceId, completedPla
   function returnToPlace() {
     gpsRequest.current += 1;
     setLocation(null); setLocationMessage(''); setLocating(false);
-    void runNativeMapTask(() => NaverNativeMap.update({ center: selectedAnchor?.position ?? REGION_MAP_REFERENCE.position, zoom: 14 })).catch(() => undefined);
+    void runNativeMapTask(() => NaverNativeMap.update(selectedAnchor ? { center: selectedAnchor.position, zoom: 14 }
+      : scenePoints.length > 1 ? { fitBounds: { points: scenePoints, padding: 48 } }
+      : { center: scenePoints[0] ?? REGION_MAP_REFERENCE.position, zoom: 14 })).catch(() => undefined);
   }
   function applyKey(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -231,7 +273,7 @@ export default function NativeTourismMap({ places, selectedPlaceId, completedPla
     try { sessionStorage.setItem(SESSION_KEY, value); window.location.reload(); }
     catch { setSettingsMessage('현재 탭에 설정을 저장하지 못했습니다. 앱을 다시 열어 주세요.'); }
   }
-  const notice = locationMessage || (selected && !selectedAnchor ? '선택 장소의 좌표는 확인 중입니다. 장소 안내와 네이버 검색을 이용해 주세요.' : selectedAnchor ? mapAnchorLabel(selectedAnchor) : '울산시 관광안내 대표 위치 · 지정 관람로를 이용해 주세요.');
+  const notice = locationMessage || (selected && !selectedAnchor ? '선택 장소의 좌표는 확인 중입니다. 장소 안내와 네이버 검색을 이용해 주세요.' : selectedAnchor ? mapAnchorLabel(selectedAnchor) : '장소 번호 · QR?는 안내판 위치 확인 중 · 지정 관람로 이용');
   return <section className={`${styles.panel} ${styles.nativePanel} ${className}`} aria-label="반구천 네이버 지도">
     <div ref={hostRef} className={styles.canvas} aria-label="iPhone 네이버 지도 영역" />
     {!ready && <div className={styles.emptySurface}><div className={styles.connectionCard} role="status">
@@ -246,7 +288,7 @@ export default function NativeTourismMap({ places, selectedPlaceId, completedPla
         <button type="button" aria-label="선택 장소로 돌아가기" title="선택 장소로 돌아가기" onClick={returnToPlace} disabled={!ready}><RotateCcw size={18}/></button>
         <button type="button" aria-label="네이버 지도 설정" onClick={() => setSettingsOpen(true)}><Settings2 size={18}/></button>
       </div>
-      <div className={styles.mapNotice} data-native-map-occluder data-native-map-inset="bottom" role="status">{ready ? notice : error ? '연결 설정을 확인해 주세요.' : '네이버 지도 연결 중…'}{ready && !tilesReady && <span> 지도 화면을 준비하고 있어요.</span>}</div>
+      <div className={styles.mapNotice} data-native-map-occluder data-native-map-inset="bottom" role="status">{ready ? notice : error ? '연결 설정을 확인해 주세요.' : '네이버 지도 연결 중…'}{ready && routeModel && <span className={styles.routeNotice}>{mapRouteNotice(routeModel)}</span>}{ready && !tilesReady && <span> 지도 화면을 준비하고 있어요.</span>}</div>
     </>}
     <dialog ref={settingsRef} className={styles.settings} aria-label="네이버 지도 연결 설정" onCancel={() => setSettingsOpen(false)} onClick={(event) => { if (event.target === event.currentTarget) setSettingsOpen(false); }}>
       <div className={styles.settingsHeader}><strong>네이버 지도 연결</strong><button type="button" aria-label="지도 설정 닫기" onClick={() => setSettingsOpen(false)}><X size={20}/></button></div>

@@ -24,6 +24,43 @@ test('locked quiz and wrong answer award nothing; app QR unlock alone awards not
   await storage.close();
 });
 
+test('self-confirmed guide reading unlocks only a known quiz and earns no reward until a correct answer', async () => {
+  const indexedDB = new IDBFactory();
+  const storage = createGameStorage({ indexedDB });
+  const fieldQuiz = quizMissions.find((mission) => mission.placeId === 'old-road')!;
+  await assert.rejects(() => storage.confirmGuide('unknown'), { code: 'UNKNOWN_MISSION' });
+  await assert.rejects(() => storage.confirmGuide(photoMission.id), { code: 'UNKNOWN_MISSION' });
+  assert.deepEqual(await storage.confirmGuide(fieldQuiz.id), { missionId: fieldQuiz.id, alreadyUnlocked: false });
+  assert.deepEqual(await storage.confirmGuide(fieldQuiz.id), { missionId: fieldQuiz.id, alreadyUnlocked: true });
+  await assert.rejects(() => storage.completeQuiz(fieldQuiz.id, (fieldQuiz.correctIndex + 1) % fieldQuiz.options.length), { code: 'WRONG_ANSWER' });
+  assert.equal(summarizeGame((await storage.snapshot()).completions).xp, 0);
+  await storage.close();
+  const reopened = createGameStorage({ indexedDB });
+  assert.ok((await reopened.snapshot()).unlockedQuizIds.includes(fieldQuiz.id));
+  const result = await reopened.completeQuiz(fieldQuiz.id, fieldQuiz.correctIndex);
+  assert.equal(result.alreadyCompleted, false);
+  assert.equal(result.completion.xp, 80);
+  assert.equal((await reopened.completeQuiz(fieldQuiz.id, fieldQuiz.correctIndex)).alreadyCompleted, true);
+  await reopened.close();
+});
+
+test('adding field missions keeps earlier app QR IDs and collected records usable', async () => {
+  const indexedDB = new IDBFactory();
+  const storage = createGameStorage({ indexedDB });
+  const original = quizMissions.find((mission) => mission.id === 'qr-bangudae-whale')!;
+  assert.equal(original.qrCode, 'BG-WHALE-26');
+  await storage.unlockQr('BG-WHALE-26');
+  const first = await storage.completeQuiz(original.id, original.correctIndex);
+  await storage.close();
+  const reopened = createGameStorage({ indexedDB });
+  await reopened.confirmGuide(original.id);
+  const saved = await reopened.completeQuiz(original.id, original.correctIndex);
+  assert.equal(saved.alreadyCompleted, true);
+  assert.deepEqual(saved.completion, first.completion);
+  assert.equal(summarizeGame((await reopened.snapshot()).completions).xp, 80);
+  await reopened.close();
+});
+
 test('concurrent correct completions across connections award once and persist after reopening', async () => {
   const indexedDB = new IDBFactory();
   const first = createGameStorage({ indexedDB });

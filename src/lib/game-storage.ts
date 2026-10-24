@@ -88,11 +88,21 @@ export function createGameStorage(options: { indexedDB?: IDBFactory; databaseNam
 
   async function unlockQr(raw: string): Promise<UnlockResult> {
     const mission = parseQrPayload(raw);
+    return unlockMission(mission.id, 'app-qr');
+  }
+
+  // Reading a guide is a self-confirmed learning step, never proof of scanning or visiting.
+  async function confirmGuide(missionId: string): Promise<UnlockResult> {
+    const mission = getQuizMission(missionId);
+    return unlockMission(mission.id, 'guide-confirmation');
+  }
+
+  async function unlockMission(missionId: string, source: GameUnlock['source']): Promise<UnlockResult> {
     return transact([UNLOCKS], 'readwrite', (transaction, result, fail) => {
       const store = transaction.objectStore(UNLOCKS);
-      read(store.get(mission.id), (existing: GameUnlock | undefined) => {
-        if (!existing) store.add({ missionId: mission.id, unlockedAt: new Date().toISOString(), source: 'app-qr' } satisfies GameUnlock);
-        result({ missionId: mission.id, alreadyUnlocked: Boolean(existing) });
+      read(store.get(missionId), (existing: GameUnlock | undefined) => {
+        if (!existing) store.add({ missionId, unlockedAt: new Date().toISOString(), source } satisfies GameUnlock);
+        result({ missionId, alreadyUnlocked: Boolean(existing) });
       }, fail);
     });
   }
@@ -105,7 +115,7 @@ export function createGameStorage(options: { indexedDB?: IDBFactory; databaseNam
       read(completions.get(mission.id), (existing: GameCompletion | undefined) => {
         if (existing) { result({ completion: existing, alreadyCompleted: true }); return; }
         read(transaction.objectStore(UNLOCKS).get(mission.id), (unlocked: GameUnlock | undefined) => {
-          if (!unlocked) throw new GameRuleError('LOCKED', '앱 체험용 QR을 스캔하거나 짧은 코드를 입력해 이 퀴즈를 먼저 열어 주세요.');
+          if (!unlocked) throw new GameRuleError('LOCKED', '장소의 해설 확인을 마치거나 앱 미션 QR로 퀴즈를 먼저 열어 주세요.');
           const completion: GameCompletion = { ...makeCompletion(mission), answerIndex };
           completions.add(completion);
           result({ completion, alreadyCompleted: false });
@@ -174,7 +184,7 @@ export function createGameStorage(options: { indexedDB?: IDBFactory; databaseNam
   }
 
   return {
-    snapshot, unlockQr, completeQuiz, completePhoto, deleteCompletion, deletePlaceRecords, clearAll, exportData,
+    snapshot, unlockQr, confirmGuide, completeQuiz, completePhoto, deleteCompletion, deletePlaceRecords, clearAll, exportData,
     async close() {
       const current = connection;
       connection = null;

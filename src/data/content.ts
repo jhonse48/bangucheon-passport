@@ -6,6 +6,7 @@ import type {
   Source,
   TourRoute,
 } from "@/lib/types";
+import { EXPLORATION_ROUTES, HERITAGE_POSITION_SOURCES, HERITAGE_REFERENCE_POSITIONS } from './exploration';
 
 const checkedAt = "2026-10-22";
 const regionUrl =
@@ -34,7 +35,8 @@ const regionalSource = source("울산광역시 · 반구천 일원", regionUrl);
 const photoCredit =
   "울산암각화박물관 / Wikimedia Commons · CC BY-SA 3.0 · 화면에 맞게 잘라 표시";
 
-// Unverified coordinates deliberately remain null. A heritage point is never used as a safe visitor destination.
+// Heritage references and safe visitor positions remain separate. Map-only approximate
+// references live in exploration.ts and never fill viewingPosition.
 const place = (
   input: Pick<
     Place,
@@ -53,17 +55,17 @@ const place = (
   image: "/images/landscape.svg",
   imageAlt: "반구천의 숲과 물을 표현한 일러스트",
   imageCredit: "반구천 탐험여권 자체 제작 일러스트 · 실제 현장 사진 아님",
-  heritagePosition: null,
+  heritagePosition: HERITAGE_REFERENCE_POSITIONS[input.id] ?? null,
   viewingPosition: null,
-  locationStatus: "확인 필요",
+  locationStatus: HERITAGE_REFERENCE_POSITIONS[input.id] ? "공식 자료 확인" : "확인 필요",
   accessNote:
     "관람 위치와 접근 동선은 현장 확인이 필요합니다. 공식 안내판과 지정된 관람 구역을 따라 주세요.",
   officialUrl: regionUrl,
   mapQuery: "울산 울주군 " + input.name,
   serviceIds: ["qr-guide", "shuttle"],
   missionIds: [],
-  sources: [regionalSource],
   ...input,
+  sources: [...(input.sources ?? [regionalSource]), ...(HERITAGE_POSITION_SOURCES[input.id] ? [HERITAGE_POSITION_SOURCES[input.id]] : [])],
 });
 
 export const places: Place[] = [
@@ -266,22 +268,22 @@ export const places: Place[] = [
 export const routes: TourRoute[] = [
   {
     id: "core",
-    name: "반구대 핵심 관광 코스",
-    subtitle: "처음 만나는 반구천",
+    name: "A · 반구대 탐방 코스",
+    subtitle: "박물관에서 조망지점까지 · 10곳",
     description:
-      "박물관에서 배운 그림을 숲길과 물길 곁에서 다시 만나보세요. 5개 장소를 살펴보는 추천 방문 순서입니다.",
-    placeIds: ["museum", "jipcheongjeong", "seowon", "dinosaur", "bangudae"],
+      "박물관·정자·비문·습지·화석·암각화 조망지점으로 이어지는 10곳의 방문 순서입니다. 점선은 방문 순서 연결선이며 실제 보행 경로가 아닙니다.",
+    placeIds: [...EXPLORATION_ROUTES.core.placeIds],
     active: true,
     image: "/images/bangudae.jpg",
     theme: "역사와 자연",
   },
   {
     id: "cheonjeon",
-    name: "천전리 세계유산 탐방 코스",
-    subtitle: "바위에 쌓인 시간",
+    name: "B · 천전리 탐방 코스",
+    subtitle: "암각화·공룡발자국·박물관 · 3곳",
     description:
-      "박물관 모형과 천전리의 그림·문자를 함께 살펴봅니다. 구간 이동은 공식 교통·현장 안내를 확인해 주세요.",
-    placeIds: ["museum", "cheonjeonri"],
+      "천전리 명문과 암각화, 공룡발자국 화석, 대곡박물관을 차례로 살펴봅니다. 점선은 방문 순서 연결선이며 실제 보행 경로가 아닙니다.",
+    placeIds: [...EXPLORATION_ROUTES.cheonjeon.placeIds],
     active: true,
     image: "/images/museum.jpg",
     theme: "세계유산 이야기",
@@ -517,35 +519,35 @@ export const collectionItems: CollectionItem[] = [
     name: "포은의 풍경",
     category: "역사문화",
     symbol: "landmark",
-    description: "포은대 이야기 카드 · 확장 예정.",
+    description: "포은대 이야기를 담은 탐방 카드.",
   },
   {
     id: "pavilion-memory",
     name: "정자의 기억",
     category: "역사문화",
     symbol: "landmark",
-    description: "모은정 이야기 카드 · 확장 예정.",
+    description: "모은정 이야기를 담은 탐방 카드.",
   },
   {
     id: "stone-memory",
     name: "돌에 남긴 마음",
     category: "역사문화",
     symbol: "book",
-    description: "유허비 이야기 카드 · 확장 예정.",
+    description: "유허비 이야기를 담은 탐방 카드.",
   },
   {
     id: "old-road-record",
     name: "옛길의 기록",
     category: "역사문화",
     symbol: "book",
-    description: "연로 개수기 카드 · 확장 예정.",
+    description: "옛길을 고친 기록을 담은 카드.",
   },
   {
     id: "wetland-life",
     name: "습지의 숨결",
     category: "자연",
     symbol: "leaf",
-    description: "자연 관찰 카드 · 확장 예정.",
+    description: "습지의 생명을 관찰하는 카드.",
   },
   {
     id: "dinosaur-trace",
@@ -566,14 +568,14 @@ export const collectionItems: CollectionItem[] = [
     name: "강의 역사",
     category: "역사문화",
     symbol: "book",
-    description: "대곡천 역사 카드 · 확장 예정.",
+    description: "대곡천 유역의 역사를 담은 카드.",
   },
   {
     id: "ancient-footprints",
     name: "아주 먼 날의 산책",
     category: "공룡",
     symbol: "footprints",
-    description: "천전리 발자국 카드 · 확장 예정.",
+    description: "천전리의 오래된 발자국을 담은 카드.",
   },
   {
     id: "layers-of-time",

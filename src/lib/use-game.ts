@@ -48,6 +48,7 @@ export function useGame() {
   }), [reload, run]);
 
   const unlockQr = useCallback((raw: string) => mutate(() => gameStorage.unlockQr(raw)), [mutate]);
+  const confirmGuide = useCallback((missionId: string) => mutate(() => gameStorage.confirmGuide(missionId)), [mutate]);
   const completeQuiz = useCallback((missionId: string, answerIndex: number) =>
     mutate(() => gameStorage.completeQuiz(missionId, answerIndex)), [mutate]);
   const completePhoto = useCallback((missionId: string, input: PhotoSubmission) => mutate(async () => {
@@ -64,7 +65,7 @@ export function useGame() {
 
   return {
     ready, error, unlockedQuizIds: snapshot.unlockedQuizIds, completions: snapshot.completions,
-    progress: summarizeGame(snapshot.completions), unlockQr, completeQuiz, completePhoto,
+    progress: summarizeGame(snapshot.completions), unlockQr, confirmGuide, completeQuiz, completePhoto,
     deleteCompletion, deletePlaceRecords, clearAll, exportData,
   };
 }

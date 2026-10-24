@@ -8,13 +8,13 @@ import {
   CheckCircle2,
   ChevronRight,
   CircleHelp,
-  LockKeyhole,
   QrCode,
   Sparkles,
   Telescope,
   X,
 } from "lucide-react";
-import { places } from "@/data/content";
+import { places, collectionItems } from "@/data/content";
+import { QrSiteInfo } from "./qr-site-info";
 import type {
   GameCompletion,
   GameMission,
@@ -33,6 +33,7 @@ type Props = {
   onClose: () => void;
   onScan: () => void;
   onDone: (completion: GameCompletion, alreadyCompleted: boolean) => void;
+  onPreparePhotoCapture?: () => Promise<((photo: Blob, withLocation: boolean) => Promise<void>) | undefined>;
 };
 export function MissionPanel({
   mission,
@@ -40,6 +41,7 @@ export function MissionPanel({
   onClose,
   onScan,
   onDone,
+  onPreparePhotoCapture,
 }: Props) {
   const active = useRef(true);
   useEffect(() => {
@@ -86,6 +88,14 @@ export function MissionPanel({
           <small>XP</small>
         </b>
       </div>
+      <div className="field-mission-plan">
+        {!place.image.endsWith(".svg") && <img src={place.image} alt={place.imageAlt} />}
+        <p className="mission-instruction">{mission.instruction}</p>
+        <ol>{mission.steps.map((step, index) => <li key={step}><b>{index + 1}</b><span>{step}</span></li>)}</ol>
+        <p className="field-observation-tip"><Telescope size={17} />{mission.observationHint}</p>
+        <div className="field-reward"><Sparkles size={19} /><span>완료하면 <strong>{collectionItems.find((item) => item.id === mission.collectionId)?.name} 카드</strong>와 장소 스탬프 · {mission.xp} XP</span></div>
+      </div>
+      <QrSiteInfo placeId={place.id} />
       {mission.kind === "quiz" ? (
         <QuizQuest
           mission={mission}
@@ -94,7 +104,7 @@ export function MissionPanel({
           onDone={finish}
         />
       ) : (
-        <PhotoQuest mission={mission} game={game} onDone={finish} />
+        <PhotoQuest mission={mission} game={game} onDone={finish} onPreparePhotoCapture={onPreparePhotoCapture} />
       )}
     </Sheet>
   );
@@ -113,8 +123,17 @@ function QuizQuest({
   const [answer, setAnswer] = useState<number | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [guideRead, setGuideRead] = useState(false);
   const place = places.find((p) => p.id === mission.placeId)!;
   const unlocked = game.unlockedQuizIds.includes(mission.id);
+  async function startFromGuide() {
+    if (!guideRead) return;
+    setBusy(true);
+    setError("");
+    try { await game.confirmGuide(mission.id); }
+    catch (e) { setError(e instanceof Error ? e.message : "미션을 열지 못했어요."); }
+    finally { setBusy(false); }
+  }
   async function submit() {
     if (answer === null) return;
     setBusy(true);
@@ -131,34 +150,24 @@ function QuizQuest({
   if (!unlocked)
     return (
       <div className="locked-quest">
-        <div className="locked-emblem">
-          <LockKeyhole size={31} />
-        </div>
-        <h3>QR을 찍으면 퀴즈가 열려요</h3>
-        <p>
-          장소의 이야기를 살펴보고
-          <br />
-          정답을 맞혀 스탬프를 모아 보세요.
-        </p>
+        <h3>해설을 읽고 관찰을 시작해요</h3>
+        <p>현장 QR로 해설을 보셨다면 이 장소의 미션을 이어가세요. QR을 찾지 못했다면 아래 공식 해설을 이용할 수 있어요.</p>
         <div className="reward-preview">
           <Whale size={43} />
           <span>
-            <strong>바위그림 카드</strong>
+            <strong>{collectionItems.find((item) => item.id === mission.collectionId)?.name} 카드</strong>
             <small>스탬프 + 80 XP</small>
           </span>
           <Sparkles size={21} />
         </div>
-        <button className="button full" onClick={onScan} disabled={!game.ready}>
-          <QrCode size={20} />
-          QR 찍고 시작하기
-        </button>
         <External href={place.officialUrl} className="text-button centered">
-          공식 해설 먼저 보기
+          공식 해설 보기
         </External>
-        <p className="fine-print">
-          체험용 미션 QR을 사용해요. 기존 현장 안내 QR은 아직 연결되지
-          않았습니다.
-        </p>
+        <label className="guide-confirmation"><input type="checkbox" checked={guideRead} onChange={(e) => setGuideRead(e.target.checked)} disabled={busy} /><span>이 장소의 현장 또는 공식 해설을 확인했어요</span></label>
+        {error && <p className="error-message" role="alert">{error}</p>}
+        <button className="button full" onClick={startFromGuide} disabled={!game.ready || !guideRead || busy}>{busy ? "미션을 여는 중…" : "관찰 문제 풀기"}<ChevronRight size={18} /></button>
+        <button className="text-button centered" onClick={onScan} disabled={!game.ready || busy}><QrCode size={18} />앱 체험용 QR로 열기</button>
+        <p className="fine-print">장소를 직접 골라 시작하는 방식이에요. 현장 QR 자동 연결·방문 인증과는 별개입니다.</p>
       </div>
     );
   return (
@@ -167,7 +176,6 @@ function QuizQuest({
         <CheckCircle2 size={17} />
         퀴즈가 열렸어요 · 차근차근 관찰해 보세요
       </div>
-      <p className="mission-instruction">{mission.instruction}</p>
       <div className="question-heading">
         <span>Q.</span>
         <h3>{mission.question}</h3>
@@ -215,10 +223,12 @@ function PhotoQuest({
   mission,
   game,
   onDone,
+  onPreparePhotoCapture,
 }: {
   mission: PhotoGameMission;
   game: Game;
   onDone: Props["onDone"];
+  onPreparePhotoCapture?: Props["onPreparePhotoCapture"];
 }) {
   const [photo, setPhoto] = useState<Blob | null>(null);
   const [subject, setSubject] = useState("");
@@ -226,17 +236,23 @@ function PhotoQuest({
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const input = useRef<HTMLInputElement>(null);
+  const pendingPhotoSaver = useRef<((photo: Blob, withLocation: boolean) => Promise<void>) | undefined>(undefined);
   const native = useNative();
   const url = usePhotoUrl(photo);
   async function capture() {
-    if (!native) {
-      input.current?.click();
-      return;
-    }
     setBusy(true);
     setError("");
     try {
-      setPhoto(await takeMissionPhoto());
+      // Bind the day/session before opening the camera. A midnight rollover must not move this capture to another day.
+      const savePhoto = await onPreparePhotoCapture?.();
+      if (!native) {
+        pendingPhotoSaver.current = savePhoto;
+        input.current?.click();
+        return;
+      }
+      const captured = await takeMissionPhoto();
+      setPhoto(captured);
+      await savePhoto?.(captured, true);
     } catch (e) {
       setError(
         e instanceof Error
@@ -266,7 +282,6 @@ function PhotoQuest({
   }
   return (
     <div className="photo-quest">
-      <p className="mission-instruction">{mission.instruction}</p>
       <div className="step-title">
         <b>1</b>
         <h4>눈에 들어온 바위그림 촬영</h4>
@@ -322,13 +337,16 @@ function PhotoQuest({
           setBusy(true);
           setError("");
           try {
-            setPhoto(await compressPhoto(file));
+            const selected = await compressPhoto(file);
+            setPhoto(selected);
+            await pendingPhotoSaver.current?.(selected, false);
           } catch (err) {
             setError(
               err instanceof Error ? err.message : "사진을 준비하지 못했어요.",
             );
           } finally {
             setBusy(false);
+            pendingPhotoSaver.current = undefined;
             e.target.value = "";
           }
         }}
@@ -360,7 +378,7 @@ function PhotoQuest({
         onChange={(e) => setNote(e.target.value)}
         maxLength={2000}
         rows={3}
-        placeholder="예: 꼬리가 양쪽으로 넓고 몸통 옆에 작은 지느러미가 보여요."
+        placeholder={mission.notePlaceholder}
       />
       <p className="fine-print">
         사진 속 대상을 자동 판별하지 않아요. 직접 관찰한 내용을 수집함에 남기는

@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import {
   useEffect,
   useMemo,
@@ -21,6 +22,10 @@ import {
   Gift,
   Info,
   MapPin,
+  Route,
+  Film,
+  Download,
+  ImageDown,
   Navigation,
   QrCode,
   Search,
@@ -52,6 +57,14 @@ import {
 } from "@/lib/native-device";
 import TourismMap from "./tourism-map";
 import { MissionPanel } from "./mission-panel";
+import { QrSiteInfo } from "./qr-site-info";
+import { getExplorationPoint } from "@/data/exploration";
+import { useJourney } from "@/lib/use-journey";
+import type { JourneyPhoto, JourneyRecord } from "@/lib/journey";
+import { journeyDistanceMeters } from "@/lib/journey";
+import { JourneyPanel, JourneySummary, formatJourneyDistance } from "./journey-panel";
+import { createJourneyVideo, journeyVideoUrl, saveJourneyVideo, shareJourneyVideo, shareJourneyPhoto, clearJourneyVideos } from "@/lib/journey-video";
+import type { JourneyVideo } from "@/lib/journey-video";
 
 export function Whale({ size = 42 }: { size?: number }) {
   return (
@@ -250,12 +263,14 @@ type Panel =
   | "services"
   | "qr-kit"
   | "photos"
+  | "journeys"
   | null;
 type Filter = "all" | "quiz" | "photo" | "done";
 
 export function PassportApp() {
   const game = useGame();
   const passport = usePassport();
+  const journey = useJourney();
   const native = useNative();
   useEffect(() => {
     if (!native) return;
@@ -283,18 +298,38 @@ export function PassportApp() {
   }, [native]);
   const [panel, setPanel] = useState<Panel>(null);
   const [selectedPlace, setSelectedPlace] = useState<Place | null>(null);
+  const [nearbyPlaces, setNearbyPlaces] = useState<Place[] | null>(null);
+  const [journeyId, setJourneyId] = useState<string | null>(null);
+  const [mapJourneyId, setMapJourneyId] = useState<string | null>(null);
+  const [journeyPhoto, setJourneyPhoto] = useState<{ photo: JourneyPhoto; journey: JourneyRecord } | null>(null);
+  const [journeyVideo, setJourneyVideo] = useState<JourneyVideo | null>(null);
+  const [videoWorking, setVideoWorking] = useState(false);
+  const [pendingJourneyPhoto, setPendingJourneyPhoto] = useState<{ blob: Blob; journeyId: string } | null>(null);
+  const journeyPhotoInput = useRef<HTMLInputElement>(null);
+  const journeyPhotoTarget = useRef<string | null>(null);
   const [mission, setMission] = useState<GameMission | null>(null);
   const [reward, setReward] = useState<GameCompletion | null>(null);
   const [filter, setFilter] = useState<Filter>("all");
   const [search, setSearch] = useState("");
+  // Every fresh launch starts with all destinations; saved travel records stay intact.
+  const [mapRouteId, setMapRouteId] = useState<string | null>(null);
   const [toast, setToast] = useState("");
   const [busy, setBusy] = useState(false);
   const [scanError, setScanError] = useState("");
   const [qrText, setQrText] = useState("");
+  const [qrScannerExpanded, setQrScannerExpanded] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<"all" | string | null>(null);
-  const ready = game.ready && passport.ready;
+  const ready = game.ready && passport.ready && journey.ready;
+  const canCaptureJourney = journey.automaticEnabled || Boolean(journey.activeJourney && journey.activeJourney.mode !== "automatic");
+  const mapJourney = journey.journeys.find((item) => item.id === mapJourneyId) ?? journey.activeJourney;
+  const journeyMapLayer = useMemo(() => mapJourney ? {
+    id: mapJourney.id, points: mapJourney.points, focus: mapJourneyId === mapJourney.id,
+    photos: mapJourney.photos.filter((photo) => photo.lat !== null && photo.lng !== null).map((photo) => ({
+      id: photo.id, lat: photo.lat!, lng: photo.lng!, thumbnailUrl: photo.thumbnailDataUrl,
+    })),
+  } : undefined, [mapJourney, mapJourneyId]);
   const activeRoute = routes.find(
-    (r) => r.id === passport.progress.activeRouteId,
+    (r) => r.id === mapRouteId,
   );
   const completedPlaces = useMemo(
     () => [
@@ -331,7 +366,9 @@ export function PassportApp() {
             ).includes(search.trim())) &&
           (!activeRoute || activeRoute.placeIds.includes(p.id))
         );
-      }),
+      }).sort((a, b) => activeRoute
+        ? activeRoute.placeIds.indexOf(a.id) - activeRoute.placeIds.indexOf(b.id)
+        : (getExplorationPoint(a.id)?.number ?? 99) - (getExplorationPoint(b.id)?.number ?? 99)),
     [filter, search, activeRoute, completedPlaces],
   );
   const collectionIds = useMemo(
@@ -345,7 +382,7 @@ export function PassportApp() {
     ],
     [game.progress.collectionIds, completedPlaces],
   );
-  const allPilot = places.filter((p) => p.pilot);
+  const collectablePlaces = places.filter((p) => gameMissions.some((m) => m.placeId === p.id));
   useEffect(() => {
     if (!toast) return;
     const timer = setTimeout(() => setToast(""), 4500);
@@ -356,6 +393,9 @@ export function PassportApp() {
     setPanel(null);
     setSelectedPlace(null);
     setMission(null);
+    setNearbyPlaces(null);
+    setJourneyPhoto(null);
+    setJourneyVideo(null);
   }
   function openPanel(value: Panel) {
     closePanels();
@@ -368,6 +408,73 @@ export function PassportApp() {
   function openMission(value: GameMission) {
     closePanels();
     setMission(value);
+  }
+  function openJourney(id?: string) {
+    closePanels();
+    setJourneyId(id ?? null);
+    setPanel("journeys");
+  }
+  function showJourneyOnMap(record: JourneyRecord) {
+    closePanels();
+    setMapJourneyId(record.id);
+    setToast("주황색 실선은 기록한 경로예요. 사진 핀을 눌러 그 순간을 확인하세요.");
+  }
+  async function setAutomaticJourney(enabled: boolean) {
+    await run(async () => {
+      const record = await journey.setAutomatic(enabled);
+      if (record) setJourneyId(record.id);
+      setMapJourneyId(null);
+    }, enabled ? "자동 기록을 켰어요. 위치가 잡히면 날짜별로 경로가 저장돼요." : "자동 기록을 껐어요. 저장된 경로와 사진은 그대로 남아요.");
+  }
+  async function finishJourney() {
+    await run(async () => {
+      const record = await journey.finish();
+      if (record) { setJourneyId(record.id); setMapJourneyId(record.id); }
+    }, "여정을 보관했어요. 경로와 사진을 확인하고 영상으로 저장해 보세요.");
+  }
+  async function recordJourneyPhoto(photo: Blob, withLocation: boolean, expectedJourneyId?: string) {
+    const targetId = expectedJourneyId ?? (journey.automaticEnabled ? (await journey.ensureAutomaticJourney())?.id : journey.activeJourney?.id);
+    if (!targetId) throw new Error("사진을 담을 오늘의 기록이 없어요. 자동 기록 설정을 확인해 주세요.");
+    let location: { lat: number; lng: number; accuracy: number; timestamp: number } | undefined;
+    if (withLocation) {
+      try {
+        const { Geolocation } = await import("@capacitor/geolocation");
+        const position = await Geolocation.getCurrentPosition({ enableHighAccuracy: true, timeout: 12000, maximumAge: 0 });
+        location = { lat: position.coords.latitude, lng: position.coords.longitude, accuracy: position.coords.accuracy, timestamp: position.timestamp };
+      } catch { /* A photo is still valuable when the GPS fix is unavailable. */ }
+    }
+    try {
+      const saved = await journey.addPhoto(photo, location, undefined, targetId);
+      setToast(saved.lat === null ? "사진을 여정에 보관했어요. 촬영 위치는 확인하지 못했어요." : "사진을 촬영 위치에 표시했어요.");
+    } catch (error) {
+      setPendingJourneyPhoto({ blob: photo, journeyId: targetId });
+      throw error;
+    }
+  }
+  async function captureJourneyPhoto() {
+    if (busy || !canCaptureJourney) return;
+    await run(async () => {
+      const record = journey.automaticEnabled ? await journey.ensureAutomaticJourney() : journey.activeJourney;
+      if (!record) throw new Error("오늘의 기록을 준비하지 못했어요. 자동 기록 설정을 확인해 주세요.");
+      const targetId = record.id;
+      if (!native) { journeyPhotoTarget.current = targetId; journeyPhotoInput.current?.click(); return; }
+      const photo = await takeMissionPhoto();
+      setPendingJourneyPhoto({ blob: photo, journeyId: targetId });
+      await recordJourneyPhoto(photo, true, targetId);
+      setPendingJourneyPhoto(null);
+    }, "");
+  }
+  async function prepareMissionPhotoCapture() {
+    const record = journey.automaticEnabled ? await journey.ensureAutomaticJourney() : journey.activeJourney;
+    if (!record) return undefined;
+    const targetId = record.id;
+    return (photo: Blob, withLocation: boolean) => recordJourneyPhoto(photo, withLocation, targetId);
+  }
+  async function renderJourneyVideo(record: JourneyRecord) {
+    if (videoWorking) return;
+    setVideoWorking(true);
+    await run(async () => setJourneyVideo(await createJourneyVideo(await journey.videoSnapshot(record.id))), "");
+    setVideoWorking(false);
   }
   async function run(action: () => Promise<unknown>, message: string) {
     setBusy(true);
@@ -404,8 +511,18 @@ export function PassportApp() {
       setBusy(false);
     }
   }
+  async function selectMapRoute(routeId: string | null) {
+    if (await run(() => passport.setRoute(routeId), routeId ? "번호 순서와 코스 연결선을 지도에서 확인하세요." : "전체 관광지를 표시해요.")) {
+      setMapRouteId(routeId);
+      setMapJourneyId(null);
+      setFilter("all");
+      setSearch("");
+      closePanels();
+    }
+  }
   async function scan() {
     openPanel("scan");
+    setQrScannerExpanded(true);
     setScanError("");
     if (!native) return;
     setBusy(true);
@@ -421,16 +538,18 @@ export function PassportApp() {
   }
   async function exportAll() {
     await run(async () => {
-      const [travel, exploration] = await Promise.all([
+      const [travel, exploration, journeys] = await Promise.all([
         passportStorage.exportData(),
         game.exportData(),
+        journey.exportData(),
       ]);
       await shareExplorationData({
         format: "bangucheon-explorer",
-        version: 2,
+        version: 3,
         exportedAt: new Date().toISOString(),
         travel,
         exploration,
+        journeys,
       });
     }, "기록 내보내기를 준비했어요.");
   }
@@ -440,6 +559,8 @@ export function PassportApp() {
     if (
       await run(async () => {
         if (target === "all") {
+          await clearJourneyVideos();
+          await journey.clearAll();
           await game.clearAll();
           await passport.clearAll();
         } else {
@@ -449,6 +570,7 @@ export function PassportApp() {
       }, "기록을 삭제했어요.")
     ) {
       setDeleteTarget(null);
+      if (target === "all") { setPendingJourneyPhoto(null); setMapJourneyId(null); setJourneyId(null); }
       closePanels();
       setPanel("collection");
     }
@@ -459,10 +581,14 @@ export function PassportApp() {
       <div className="map-stage" aria-label="네이버 탐험지도">
         <TourismMap
           places={filteredPlaces}
+          route={activeRoute ?? null}
           selectedPlaceId={selectedPlace?.id ?? null}
           completedPlaceIds={completedPlaces}
           onSelect={openPlace}
-          nativeMapHidden={Boolean(panel || selectedPlace || mission || reward || deleteTarget || busy)}
+          onSelectGroup={(group) => { closePanels(); setNearbyPlaces(group); }}
+          journey={journeyMapLayer}
+          onSelectJourneyPhoto={(id) => { const photo = mapJourney?.photos.find((item) => item.id === id); if (photo && mapJourney) { closePanels(); setJourneyPhoto({ photo, journey: mapJourney }); } }}
+          nativeMapHidden={Boolean(panel || selectedPlace || nearbyPlaces || mission || reward || deleteTarget || busy || journeyPhoto || journeyVideo || pendingJourneyPhoto)}
         />
       </div>
       <div className="map-top" data-native-map-inset="top">
@@ -523,26 +649,40 @@ export function PassportApp() {
               {item.title}
             </button>
           ))}
-          <button onClick={() => openPanel("routes")}>
-            <Footprints size={15} />
-            코스
-          </button>
         </div>
-        {activeRoute && (
-          <div className="active-route" data-native-map-occluder>
-            <Footprints size={14} />
-            <span>{activeRoute.name}</span>
-            <button
-              disabled={busy}
-              onClick={() =>
-                run(() => passport.setRoute(null), "전체 장소를 표시해요.")
-              }
-              aria-label="코스 필터 해제"
-            >
-              <X size={16} />
+        <div className="map-course-switch" aria-label="지도 코스 선택" data-native-map-occluder>
+          <button aria-pressed={!activeRoute} className={!activeRoute ? "selected" : ""} disabled={busy || !ready} onClick={() => void selectMapRoute(null)}>전체 명소</button>
+          <button aria-pressed={mapRouteId === "core"} className={mapRouteId === "core" ? "selected" : ""} disabled={busy || !ready} onClick={() => void selectMapRoute("core")}><span>A</span>반구대</button>
+          <button aria-pressed={mapRouteId === "cheonjeon"} className={mapRouteId === "cheonjeon" ? "selected" : ""} disabled={busy || !ready} onClick={() => void selectMapRoute("cheonjeon")}><span>B</span>천전리</button>
+          <button onClick={() => openPanel("routes")} aria-label="코스 방문 순서 보기"><Footprints size={16} />코스 안내</button>
+        </div>
+        <div className="map-progress-row">
+          {activeRoute && (
+            <div className="active-route" data-native-map-occluder>
+              <Footprints size={14} />
+              <span>{activeRoute.name}</span>
+              <button
+                disabled={busy}
+                onClick={() =>
+                  selectMapRoute(null)
+                }
+                aria-label="코스 필터 해제"
+              >
+                <X size={16} />
+              </button>
+            </div>
+          )}
+          <div className="journey-map-bar" data-native-map-occluder>
+            <button className="journey-map-label" onClick={() => openJourney(journey.activeJourney?.id)} aria-label={`오늘의 여정${journey.automaticEnabled ? journey.activeJourney?.status === "recording" ? ", 자동 기록 중" : ", 위치 확인 중" : ", 자동 기록 설정"}${journey.activeJourney ? `, ${formatJourneyDistance(journeyDistanceMeters(journey.activeJourney))}, 사진 ${journey.activeJourney.photos.length}장` : ""}`}>
+              <span aria-hidden="true" className={journey.activeJourney?.status === "recording" ? "recording-dot" : ""}>{journey.activeJourney?.status !== "recording" && <Route size={15} />}</span>
+              <span><strong>오늘의 여정</strong><small>{journey.activeJourney ? `${formatJourneyDistance(journeyDistanceMeters(journey.activeJourney))} · 사진 ${journey.activeJourney.photos.length}장` : journey.automaticEnabled ? "위치 확인 중" : "자동 기록 설정"}</small></span>
             </button>
+            {journey.automaticEnabled
+              ? canCaptureJourney && <button className="journey-bar-camera" disabled={busy} onClick={() => void captureJourneyPhoto()} aria-label="현재 여정에 사진 촬영"><Camera size={17} /></button>
+              : <button className="journey-bar-start" disabled={busy || !journey.ready} onClick={() => openJourney(journey.activeJourney?.id)} aria-label="자동 기록 설정"><Settings2 size={16} /></button>}
           </div>
-        )}
+        </div>
+        {mapJourneyId && mapJourney && <div className="journey-map-history" data-native-map-occluder><span><Route size={14} />저장한 경로 · 주황색 실선</span><button onClick={() => setMapJourneyId(null)} aria-label="저장한 여정 지도 닫기"><X size={16} /></button></div>}
       </div>
       <div className="map-side-actions" data-native-map-occluder>
         <button
@@ -565,7 +705,7 @@ export function PassportApp() {
                   ? "나의 수집 장소"
                   : filter === "photo"
                     ? "바위그림을 사진으로 수집해요"
-                    : "오늘의 발견을 시작해요"}
+                    : activeRoute ? activeRoute.name : "반구천을 탐험해 보세요!"}
               <small>{filteredPlaces.length}</small>
             </h2>
           </div>
@@ -608,7 +748,7 @@ export function PassportApp() {
                   </span>
                 </div>
                 <span className="map-place-copy">
-                  <small>{p.category}</small>
+                  <small>{activeRoute ? activeRoute.placeIds.indexOf(p.id) + 1 : getExplorationPoint(p.id)?.number} · {p.category}</small>
                   <strong>{p.shortName}</strong>
                   <span>
                     {count ? (
@@ -633,7 +773,7 @@ export function PassportApp() {
                 onClick={() => {
                   setFilter("all");
                   setSearch("");
-                  void run(() => passport.setRoute(null), "");
+                  void selectMapRoute(null);
                 }}
               >
                 전체 장소 보기
@@ -644,17 +784,17 @@ export function PassportApp() {
       </section>
       <nav className="map-nav" aria-label="주 메뉴" data-native-map-occluder data-native-map-inset="bottom">
         <button
-          className={!panel && !selectedPlace && !mission ? "current" : ""}
+          className={!panel && !selectedPlace && !nearbyPlaces && !mission ? "current" : ""}
           onClick={closePanels}
         >
           <Compass size={22} />
           <span>탐험지도</span>
         </button>
-        <button className="scan-nav" onClick={scan} disabled={!ready || busy}>
+        <button className="scan-nav" onClick={() => openPanel("scan")} disabled={!ready || busy}>
           <span>
             <QrCode size={25} />
           </span>
-          <b>QR 찍기</b>
+          <b>QR · 미션</b>
         </button>
         <button
           className={panel === "collection" ? "current" : ""}
@@ -665,9 +805,9 @@ export function PassportApp() {
           {completedPlaces.length > 0 && <i>{completedPlaces.length}</i>}
         </button>
       </nav>
-      {(game.error || passport.error) && (
+      {(game.error || passport.error || journey.error) && (
         <div className="storage-error" role="alert" data-native-map-occluder>
-          {game.error || passport.error}
+          {game.error || passport.error || journey.error}
         </div>
       )}
       {toast && (
@@ -676,7 +816,20 @@ export function PassportApp() {
           {toast}
         </div>
       )}
+      <input ref={journeyPhotoInput} type="file" accept="image/jpeg,image/png,image/webp" className="sr-only" aria-label="여정에 사진 추가" onChange={async (event) => {
+        const file = event.target.files?.[0];
+        event.target.value = "";
+        if (!file) return;
+        const targetId = journeyPhotoTarget.current;
+        if (!targetId) return;
+        setPendingJourneyPhoto({ blob: file, journeyId: targetId });
+        await run(async () => { await recordJourneyPhoto(file, false, targetId); setPendingJourneyPhoto(null); }, "");
+      }} />
 
+      {nearbyPlaces && <Sheet title={`가까이 있는 관광지 ${nearbyPlaces.length}곳`} onClose={() => setNearbyPlaces(null)}>
+        <p className="muted">같은 구역에 모여 있는 장소예요. 하나를 골라 위치와 미션을 살펴보세요.</p>
+        <div className="guide-site-list">{nearbyPlaces.map((place) => <button key={place.id} onClick={() => openPlace(place)}><b>{activeRoute ? activeRoute.placeIds.indexOf(place.id) + 1 : getExplorationPoint(place.id)?.number}</b><span><strong>{place.shortName}</strong><small>{place.description}</small></span><ChevronRight size={18} /></button>)}</div>
+      </Sheet>}
       {selectedPlace && (
         <Sheet
           title="발견한 장소"
@@ -704,6 +857,8 @@ export function PassportApp() {
             </div>
           </div>
           <p className="place-description">{selectedPlace.description}</p>
+          {getExplorationPoint(selectedPlace.id) && <p className="place-map-reference"><MapPin size={16} />{getExplorationPoint(selectedPlace.id)?.coordinateNote}</p>}
+          <QrSiteInfo placeId={selectedPlace.id} />
           <div className="action-pair">
             <External
               href={naverSearch(selectedPlace)}
@@ -854,7 +1009,16 @@ export function PassportApp() {
       )}
 
       {panel === "scan" && (
-        <Sheet title="QR로 퀴즈 열기" onClose={() => setPanel(null)}>
+        <Sheet title="현장 QR 위치와 미션" onClose={() => setPanel(null)}>
+          <div className="field-guide-intro"><QrCode size={29} /><div><h3>지금 있는 장소를 골라 보세요</h3><p>현장 QR 해설을 확인한 뒤 장소별 관찰 미션으로 이어가요.</p></div></div>
+          {(["A", "B"] as const).map((zone) => <section key={zone} className="guide-site-section"><h3>{zone}구역 · {zone === "A" ? "반구대 방향" : "천전리 방향"}</h3><div className="guide-site-list">{places.filter((p) => p.zone === zone && getExplorationPoint(p.id)?.qr.status !== "not-listed").map((p) => {
+            const point = getExplorationPoint(p.id);
+            const quiz = quizMissions.find((m) => m.placeId === p.id);
+            if (!point || !quiz) return null;
+            return <button key={p.id} onClick={() => openMission(quiz)}><b>{point.number}</b><span><strong>{p.shortName}</strong><small>{point.qr.where}</small><em className={point.qr.status === "photo-confirmed" ? "confirmed" : "pending"}>{point.qr.label}</em></span><ChevronRight size={18} /></button>;
+          })}</div></section>)}
+          <p className="fine-print">QR 안내판의 상세 설치 위치는 확인 상태를 참고하세요. 현재는 장소를 직접 선택하며, 현장 QR 주소의 자동 연결은 준비 중입니다.</p>
+          <details className="app-qr-tools" open={qrScannerExpanded} onToggle={(event) => setQrScannerExpanded(event.currentTarget.open)}><summary>앱 체험용 QR 스캔 · 코드 입력</summary>
           <div className="scan-frame">
             <div className="scan-corners">
               <QrCode size={84} />
@@ -921,13 +1085,13 @@ export function PassportApp() {
             </p>
           )}
           <p className="fine-print">
-            현재는 앱에서 발급한 체험용 QR을 사용해요. 기존 현장 QR과의 연결은
-            확인 후 추가됩니다.
+            아래 스캔과 코드는 앱 체험용입니다. 현장 해설을 보셨다면 위에서 장소를 선택해 미션을 이어가세요.
           </p>
           <button className="text-button" onClick={() => setPanel("qr-kit")}>
             체험용 QR 보기
             <ChevronRight size={16} />
           </button>
+          </details>
         </Sheet>
       )}
 
@@ -938,6 +1102,7 @@ export function PassportApp() {
           game={game}
           onClose={() => setMission(null)}
           onScan={scan}
+          onPreparePhotoCapture={canCaptureJourney ? prepareMissionPhotoCapture : undefined}
           onDone={(completion, alreadyCompleted) => {
             setMission(null);
             if (alreadyCompleted)
@@ -947,6 +1112,34 @@ export function PassportApp() {
         />
       )}
 
+      {panel === "journeys" && <Sheet title="오늘의 여정" onClose={() => { if (!videoWorking) setPanel(null); }} className="journey-sheet">
+        {videoWorking ? <div className="journey-rendering" role="status"><Film size={32} /><span>여정 영상을 만들고 있어요<small>사진과 경로를 담는 동안 앱을 열어 두세요.</small></span></div> :
+        <JourneyPanel key={journeyId ?? "list"} journeys={journey.journeys} selectedId={journeyId} ready={journey.ready} busy={busy} native={native}
+          automaticEnabled={journey.automaticEnabled} automaticSupported={journey.automaticSupported} authorization={journey.authorization} trackingError={journey.error}
+          onAutomatic={(enabled) => void setAutomaticJourney(enabled)} onBackgroundAuthorization={() => void run(async () => { await journey.requestBackgroundAuthorization(); }, "iPhone의 위치 권한 설정을 확인해 주세요.")}
+          onSelect={setJourneyId} onPause={() => void run(() => journey.pause(), "경로 기록을 잠시 멈췄어요.")}
+          onResume={() => void run(() => journey.resume(), "여정 기록을 다시 시작했어요.")} onFinish={() => void finishJourney()}
+          onCapture={() => void captureJourneyPhoto()} onMap={showJourneyOnMap} onVideo={(record) => void renderJourneyVideo(record)}
+          onPhoto={(photo, record) => setJourneyPhoto({ photo, journey: record })}
+          onDelete={(id) => void run(async () => { await clearJourneyVideos(id); await journey.deleteJourney(id); setJourneyId(null); if (mapJourneyId === id) setMapJourneyId(null); }, "여정을 삭제했어요.")}
+        />}
+      </Sheet>}
+      {journeyPhoto && <Sheet title="길 위의 순간" onClose={() => setJourneyPhoto(null)}><JourneyPhotoDetail photo={journeyPhoto.photo} onMap={() => showJourneyOnMap(journeyPhoto.journey)} /></Sheet>}
+      {pendingJourneyPhoto && !busy && <Sheet title="아직 저장하지 못한 사진" onClose={() => setPendingJourneyPhoto(null)}>
+        <PendingJourneyPhoto photo={pendingJourneyPhoto.blob} />
+        <p className="fine-print">사진이 아직 여정에 저장되지 않았어요. 이 화면을 닫기 전에 저장을 다시 시도해 주세요. 재시도 시에는 촬영 위치를 임의로 붙이지 않습니다.</p>
+        <button className="button full" disabled={journey.activeJourney?.id !== pendingJourneyPhoto.journeyId} onClick={() => void run(async () => { await recordJourneyPhoto(pendingJourneyPhoto.blob, false, pendingJourneyPhoto.journeyId); setPendingJourneyPhoto(null); }, "")}><Camera size={18} />사진 다시 저장</button>
+        <button className="button secondary full journey-share-button" onClick={() => void run(() => shareJourneyPhoto(pendingJourneyPhoto.blob), "")}><Download size={18} />원본 사진 파일로 저장</button>
+      </Sheet>}
+      {journeyVideo && <Sheet title="나의 여정 영상" onClose={() => setJourneyVideo(null)} className="journey-video-sheet">
+        <video className="journey-video" controls playsInline preload="metadata" src={journeyVideoUrl(journeyVideo)} />
+        <p className="muted">경로와 사진으로 만든 나만의 여행 기록이에요.</p>
+        {journeyVideo.mapStyle === "route" && <p className="fine-print">지도 이미지를 불러오지 못해 기록한 좌표로 경로를 그렸어요.</p>}
+        <button className="button full" disabled={busy} onClick={() => void run(() => saveJourneyVideo(journeyVideo), "영상을 사진 앱에 저장했어요.")}><ImageDown size={18} />사진 앱에 동영상 저장</button>
+        <button className="button secondary full journey-share-button" disabled={busy} onClick={() => void run(() => shareJourneyVideo(journeyVideo), "")}><Download size={18} />파일로 저장 · 공유</button>
+        <p className="fine-print">공유 화면의 ‘파일에 저장’을 선택하면 MP4 파일을 내려받을 수 있어요.</p>
+      </Sheet>}
+
       {panel === "collection" && (
         <Sheet title="나의 수집함" onClose={() => setPanel(null)}>
           <div className="passport-card">
@@ -954,7 +1147,16 @@ export function PassportApp() {
               <span>BANGUCHEON EXPLORER</span>
               <Stamp size={23} />
             </div>
-            <Whale size={80} />
+            <div className="passport-avatar">
+              <Image
+                src="/images/characters/explorer.png"
+                alt="모자를 쓰고 배낭을 멘 채 지팡이를 든 작은 탐험가"
+                width={360}
+                height={360}
+                unoptimized
+                loading="eager"
+              />
+            </div>
             <span className="level-pill">LEVEL {game.progress.level}</span>
             <h3>{game.progress.levelName}</h3>
             <p>작은 발견들이 나만의 이야기가 돼요.</p>
@@ -975,17 +1177,17 @@ export function PassportApp() {
               <strong>
                 {
                   completedPlaces.filter((id) =>
-                    allPilot.some((p) => p.id === id),
+                    collectablePlaces.some((p) => p.id === id),
                   ).length
                 }
-                <small>/6</small>
+                <small>/{collectablePlaces.length}</small>
               </strong>
               <span>장소 스탬프</span>
             </div>
             <div>
               <strong>
                 {game.progress.completedCount}
-                <small>/9</small>
+                <small>/{gameMissions.length}</small>
               </strong>
               <span>완료 미션</span>
             </div>
@@ -999,7 +1201,7 @@ export function PassportApp() {
             <span>{collectionIds.length}개 수집</span>
           </div>
           <div className="collection-grid">
-            {allPilot.map((p) => {
+            {collectablePlaces.map((p) => {
               const item = collectionItems.find((c) => c.id === p.collectionId);
               const earned =
                 collectionIds.includes(p.collectionId) ||
@@ -1010,19 +1212,21 @@ export function PassportApp() {
                   className={
                     "collection-cell " + (earned ? "earned" : "locked")
                   }
+                  aria-label={`${item?.name ?? p.shortName}, ${earned ? "수집 완료" : "아직 발견하지 못함"}. ${p.shortName} 장소 보기`}
                   onClick={() => openPlace(p)}
                 >
-                  <span>
-                    {p.id === "bangudae" || p.id === "museum" ? (
-                      <Whale size={43} />
-                    ) : p.id === "dinosaur" ? (
-                      <Footprints size={32} />
-                    ) : (
-                      <Stamp size={32} />
-                    )}
+                  <span className="collection-art">
+                    <Image
+                      className="collection-character"
+                      src={`/images/characters/${p.collectionId}.png`}
+                      alt=""
+                      width={176}
+                      height={176}
+                      unoptimized
+                    />
                   </span>
                   {earned && (
-                    <i>
+                    <i aria-hidden="true">
                       <Check size={11} />
                     </i>
                   )}
@@ -1032,64 +1236,7 @@ export function PassportApp() {
               );
             })}
           </div>
-          <div className="section-label">
-            <h3>사진으로 남긴 발견</h3>
-            <span>{game.progress.photoCount}장</span>
-          </div>
-          <div className="photo-journal">
-            {Object.values(game.completions)
-              .filter((c) => c.photo)
-              .map((c) => (
-                <PhotoMemory
-                  key={c.missionId}
-                  completion={c}
-                  onOpen={() => {
-                    const m = gameMissions.find((m) => m.id === c.missionId);
-                    if (m) openMission(m);
-                  }}
-                />
-              ))}
-            {game.progress.photoCount === 0 && (
-              <button
-                className="photo-empty"
-                onClick={() => setPanel("photos")}
-              >
-                <Camera size={27} />
-                <span>첫 바위그림을 수집해 볼까요?</span>
-                <b>
-                  사진 미션 시작
-                  <ArrowRight size={16} />
-                </b>
-              </button>
-            )}
-          </div>
-          <div className="section-label">
-            <h3>나의 여행 메모</h3>
-          </div>
-          {Object.values(passport.records)
-            .filter((r) => r.note || r.photo || r.visitedAt)
-            .map((r) => (
-              <button
-                key={r.placeId}
-                className="memo-row"
-                onClick={() => {
-                  const p = places.find((p) => p.id === r.placeId);
-                  if (p) openPlace(p);
-                }}
-              >
-                <BookOpen size={19} />
-                <span>
-                  <strong>{placeName(r.placeId)}</strong>
-                  <small>{r.note || "사진 또는 방문 기록"}</small>
-                </span>
-                <ChevronRight size={17} />
-              </button>
-            ))}
-          {Object.keys(passport.records).length === 0 && (
-            <p className="quiet-message">
-              장소 카드에서 자유롭게 메모를 남길 수 있어요.
-            </p>
-          )}
+          <JourneySummary journeys={journey.journeys} ready={journey.ready} automaticEnabled={journey.automaticEnabled} onOpen={openJourney} />
           <p className="fine-print">
             이 앱에 저장되는 개인 기록이에요. 앱 삭제·기기 변경 전에 내보내
             주세요. 공식 방문 인증이나 실물 보상과는 별개입니다.
@@ -1116,9 +1263,9 @@ export function PassportApp() {
       {panel === "routes" && (
         <Sheet title="탐험 코스 고르기" onClose={() => setPanel(null)}>
           <p className="muted">
-            코스를 고르면 지도와 장소 목록에 해당 장소만 보여요.
+            A·B 코스를 고르면 방문 지점에 번호가 붙고 지도에 순서 연결선이 표시돼요.
           </p>
-          {routes.map((route) => (
+          {routes.filter((route) => route.active).map((route) => (
             <div className="route-choice" key={route.id}>
               <span className="eyebrow">
                 {route.active ? "추천 코스" : "확장 준비 중"}
@@ -1134,16 +1281,7 @@ export function PassportApp() {
                 className="button full"
                 disabled={!route.active || !ready || busy}
                 onClick={async () => {
-                  if (
-                    await run(
-                      () => passport.setRoute(route.id),
-                      "지도에서 코스를 둘러보세요.",
-                    )
-                  ) {
-                    setPanel(null);
-                    setFilter("all");
-                    setSearch("");
-                  }
+                  await selectMapRoute(route.id);
                 }}
               >
                 <Footprints size={17} />
@@ -1152,8 +1290,7 @@ export function PassportApp() {
             </div>
           ))}
           <p className="fine-print">
-            방문 순서를 제안하는 코스입니다. 지정된 탐방로와 현장 안내를
-            따라주세요.
+            점선은 방문 순서 연결선이며 실제 도보 길찾기 경로가 아닙니다. 지정 탐방로와 현장 안내를 따라 이동해 주세요.
           </p>
         </Sheet>
       )}
@@ -1319,7 +1456,15 @@ export function PassportApp() {
             <Sparkles />
           </div>
           <div className="reward-medal">
-            <Whale size={87} />
+            <Image
+              className="collection-character"
+              src={`/images/characters/${reward.collectionId}.png`}
+              alt=""
+              width={220}
+              height={220}
+              unoptimized
+              loading="eager"
+            />
             <i>
               <Check size={24} />
             </i>
@@ -1369,7 +1514,7 @@ export function PassportApp() {
                 : placeName(deleteTarget) + " 기록을 삭제할까요?"}
             </h3>
             <p>
-              사진·메모·방문 기록·미션과 XP가 삭제됩니다. 삭제한 기록은 복구할
+              {deleteTarget === "all" ? "여정의 경로·사진과 기존 사진·메모·방문 기록·미션·XP가 모두 삭제됩니다. " : "이 장소의 사진·메모·방문 기록·미션과 XP가 삭제됩니다. "}삭제한 기록은 복구할
               수 없어요. 필요한 기록을 먼저 내보내 주세요.
             </p>
             <div className="action-pair">
@@ -1394,23 +1539,19 @@ export function PassportApp() {
   );
 }
 
-function PhotoMemory({
-  completion,
-  onOpen,
-}: {
-  completion: GameCompletion;
-  onOpen: () => void;
-}) {
-  const url = usePhotoUrl(completion.photo);
-  return (
-    <button className="photo-memory" onClick={onOpen}>
-      {url && <img src={url} alt={completion.subject + " 관찰 사진"} />}
-      <span>
-        <strong>{completion.subject}</strong>
-        <small>{placeName(completion.placeId)}</small>
-      </span>
-    </button>
-  );
+function PendingJourneyPhoto({ photo }: { photo: Blob }) {
+  const url = usePhotoUrl(photo);
+  return url ? <img className="journey-full-photo" src={url} alt="저장 대기 중인 여정 사진" /> : null;
+}
+function JourneyPhotoDetail({ photo, onMap }: { photo: JourneyPhoto; onMap: () => void }) {
+  const url = usePhotoUrl(photo.blob);
+  const located = photo.lat !== null && photo.lng !== null;
+  return <>
+    {url && <img className="journey-full-photo" src={url} alt="여정 중 촬영한 사진" />}
+    <p className="journey-photo-time">{new Date(photo.createdAt).toLocaleString("ko-KR")}</p>
+    <p className="muted">{located ? "촬영 시 확인한 위치에 기록한 순간이에요." : "촬영 위치를 확인하지 못해 사진만 보관했어요."}</p>
+    {located && <button className="button secondary full" onClick={onMap}><MapPin size={18} />이 사진의 여정 지도 보기</button>}
+  </>;
 }
 function RecordEditor({
   place,

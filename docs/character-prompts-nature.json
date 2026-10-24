@@ -1,0 +1,50 @@
+[
+  {
+    "name": "wetland-life",
+    "prompt": "Use case: illustration-story. Asset type: collectible mascot cutout for a Korean river heritage touring iPhone app, legible when displayed at 80px. Style: original cute hand-drawn storybook cartoon, simple chubby proportions and large expressive head, thick slightly wobbly dark olive/charcoal ink outlines, flat muted sage/olive green, warm ochre/tan and cream colors with small peach cheeks, restrained detail. Reference spirit: a simple black-outline character card combined with a round friendly hiking adventurer. Composition: one centered isolated character occupies 85% of a square, full body and all accessories uncropped, appealing readable silhouette. Background: genuinely transparent alpha, no white rectangle, no checkerboard drawn into the artwork. Constraints: no text, letters, signature, watermark, card border, UI, scenery or 3D. Subject: A smiling round green frog with a cream belly, wearing a lily-pad hat and holding a single reed, cheerful nature explorer, small toes and soft peach cheeks.",
+    "source": "/Users/jhonse48/.codex/generated_images/01a16c85-279c-7a02-9da4-494fc03b8860/exec-5882b59a-7867-4c60-8318-677590ac35f2.png",
+    "destination": "public/images/characters/wetland-life.png",
+    "mode": "built-in image_gen",
+    "transparent_background": true
+  },
+  {
+    "name": "dinosaur-trace",
+    "prompt": "Use case: illustration-story. Asset type: collectible mascot cutout for a Korean river heritage touring iPhone app, legible when displayed at 80px. Style: original cute hand-drawn storybook cartoon, simple chubby proportions and large expressive head, thick slightly wobbly dark olive/charcoal ink outlines, flat muted sage/olive green, warm ochre/tan and cream colors with small peach cheeks, restrained detail. Reference spirit: a simple black-outline character card combined with a round friendly hiking adventurer. Composition: one centered isolated character occupies 85% of a square, full body and all accessories uncropped, appealing readable silhouette. Background: genuinely transparent alpha, no white rectangle, no checkerboard drawn into the artwork. Constraints: no text, letters, signature, watermark, card border, UI, scenery or 3D. Subject: A cute chubby sage-green baby long-neck dinosaur with ochre spots examining its own big lifted foot with a curious delighted face, tiny rounded tail, no clothing.",
+    "source": "/Users/jhonse48/.codex/generated_images/01a16c85-279c-7a02-9da4-494fc03b8860/exec-ed805b9b-87f2-4543-b2c0-78f421fde7ab.png",
+    "destination": "public/images/characters/dinosaur-trace.png",
+    "mode": "built-in image_gen",
+    "transparent_background": true
+  },
+  {
+    "name": "whale-discovery",
+    "prompt": "Use case: illustration-story. Asset type: collectible mascot cutout for a Korean river heritage touring iPhone app, legible when displayed at 80px. Style: original cute hand-drawn storybook cartoon, simple chubby proportions and large expressive head, thick slightly wobbly dark olive/charcoal ink outlines, flat muted sage/olive green, warm ochre/tan and cream colors with small peach cheeks, restrained detail. Reference spirit: a simple black-outline character card combined with a round friendly hiking adventurer. Composition: one centered isolated character occupies 85% of a square, full body and all accessories uncropped, appealing readable silhouette. Background: genuinely transparent alpha, no white rectangle, no checkerboard drawn into the artwork. Constraints: no text, letters, signature, watermark, card border, UI, scenery or 3D. Subject: An adorable plump muted teal whale with a small cream belly and tiny ochre explorer neckerchief, one little water droplet above its head, joyous friendly face, small rounded flippers and tail.",
+    "source": "/Users/jhonse48/.codex/generated_images/01a16c85-279c-7a02-9da4-494fc03b8860/exec-c125140c-78e4-408c-a03f-f283cf1aa4a6.png",
+    "destination": "public/images/characters/whale-discovery.png",
+    "mode": "built-in image_gen",
+    "transparent_background": true
+  },
+  {
+    "name": "river-history",
+    "prompt": "Use case: illustration-story. Asset type: collectible mascot cutout for a Korean river heritage touring iPhone app, legible when displayed at 80px. Style: original cute hand-drawn storybook cartoon, simple chubby proportions and large expressive head, thick slightly wobbly dark olive/charcoal ink outlines, flat muted sage/olive green, warm ochre/tan and cream colors with small peach cheeks, restrained detail. Reference spirit: a simple black-outline character card combined with a round friendly hiking adventurer. Composition: one centered isolated character occupies 85% of a square, full body and all accessories uncropped, appealing readable silhouette. Background: genuinely transparent alpha, no white rectangle, no checkerboard drawn into the artwork. Constraints: no text, letters, signature, watermark, card border, UI, scenery or 3D. Subject: A cute round tan river otter historian hugging one cream pottery jar, wearing a small olive satchel, soft whisker dots, curious expressive face and small rounded paws.",
+    "source": "/Users/jhonse48/.codex/generated_images/01a16c85-279c-7a02-9da4-494fc03b8860/exec-263cba90-ef14-42a5-a414-238d8b3264c6.png",
+    "destination": "public/images/characters/river-history.png",
+    "mode": "built-in image_gen",
+    "transparent_background": true
+  },
+  {
+    "name": "ancient-footprints",
+    "prompt": "Use case: illustration-story. Asset type: collectible mascot cutout for a Korean river heritage touring iPhone app, legible when displayed at 80px. Style: original cute hand-drawn storybook cartoon, simple chubby proportions and large expressive head, thick slightly wobbly dark olive/charcoal ink outlines, flat muted sage/olive green, warm ochre/tan and cream colors with small peach cheeks, restrained detail. Reference spirit: a simple black-outline character card combined with a round friendly hiking adventurer. Composition: one centered isolated character occupies 85% of a square, full body and all accessories uncropped, appealing readable silhouette. Background: genuinely transparent alpha, no white rectangle, no checkerboard drawn into the artwork. Constraints: no text, letters, signature, watermark, card border, UI, scenery or 3D. Subject: An adorable cream-and-ochre baby triceratops with small soft rounded horns and a small sage backpack, taking a step with one foot raised, cheerful face, very distinct silhouette from a long-neck dinosaur.",
+    "source": "/Users/jhonse48/.codex/generated_images/01a16c85-279c-7a02-9da4-494fc03b8860/exec-23b79c10-613e-4fb4-9838-c1ea4e19ddee.png",
+    "destination": "public/images/characters/ancient-footprints.png",
+    "mode": "built-in image_gen",
+    "transparent_background": true
+  },
+  {
+    "name": "layers-of-time",
+    "prompt": "Use case: illustration-story. Asset type: collectible mascot cutout for a Korean river heritage touring iPhone app, legible when displayed at 80px. Style: original cute hand-drawn storybook cartoon, simple chubby proportions and large expressive head, thick slightly wobbly dark olive/charcoal ink outlines, flat muted sage/olive green, warm ochre/tan and cream colors with small peach cheeks, restrained detail. Reference spirit: a simple black-outline character card combined with a round friendly hiking adventurer. Composition: one centered isolated character occupies 85% of a square, full body and all accessories uncropped, appealing readable silhouette. Background: genuinely transparent alpha, no white rectangle, no checkerboard drawn into the artwork. Constraints: no text, letters, signature, watermark, card border, UI, scenery or 3D. Subject: A cute chubby pale stone-gray rock spirit with three subtle wavy geological bands, tiny leaf hat, small arms and feet, holding a magnifying glass, happy curious face and soft peach cheeks.",
+    "source": "/Users/jhonse48/.codex/generated_images/01a16c85-279c-7a02-9da4-494fc03b8860/exec-2025cdf7-11ec-41c5-9f65-8b172f0ee5a2.png",
+    "destination": "public/images/characters/layers-of-time.png",
+    "mode": "built-in image_gen",
+    "transparent_background": true
+  }
+]

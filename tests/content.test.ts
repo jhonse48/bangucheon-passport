@@ -74,7 +74,7 @@ test("content includes 13 distinct places, six pilot places and the required two
     uniqueIds(items, label);
 });
 
-test("route stops refer to real places and active routes stay within the pilot scope", () => {
+test("route stops refer to real places and A/B routes cover all 13 places", () => {
   const placeById = new Map(places.map((place) => [place.id, place]));
   for (const route of routes) {
     assert.ok(route.placeIds.length > 0, `${route.id}: empty route`);
@@ -86,14 +86,11 @@ test("route stops refer to real places and active routes stay within the pilot s
     for (const id of route.placeIds) {
       const place = placeById.get(id);
       assert.ok(place, `${route.id}: unknown stop ${id}`);
-      if (route.active)
-        assert.equal(
-          place.pilot,
-          true,
-          `${route.id}: active stop ${id} must be a pilot place`,
-        );
     }
   }
+  const activeStops = routes.filter((route) => route.active).flatMap((route) => route.placeIds);
+  assert.equal(activeStops.length, 13);
+  assert.equal(new Set(activeStops).size, 13);
   assert.ok(
     routes.some(
       (route) => !route.active && route.placeIds.length === places.length,

@@ -1,0 +1,50 @@
+[
+  {
+    "id": "clear-landscape",
+    "prompt": "Use case: illustration-story. Asset type: standalone collectible mascot cutout for a Korean river heritage touring iPhone app, displayed at 80 pixels. Generate one original cute hand-drawn character, playful storybook doodle inspired by simple cartoon adventurers and black-outline character cards. Thick slightly wobbly dark olive/charcoal ink outlines, flat muted sage and olive green, warm ochre/tan, cream, small peach cheeks. Chubby proportions, large expressive head, minimal detail and clear silhouette legible at 80px. Centered isolated whole character occupying 85% of a square canvas. True transparent alpha background. Whole body and all accessories uncropped, with a small clear margin. No text, letters, signature, watermark, card, UI, scene, drop shadow, background circle, or 3D rendering. Subject: A smiling mint river otter poet holding a rolled ivory paper scroll and a reed pen; wide round head, cream cheeks and belly, little whiskers, plump short tail and feet, a tiny olive beret.",
+    "source": "/Users/jhonse48/.codex/generated_images/01a16c84-f19a-7133-97fa-2c86be732b8c/exec-314c5ef4-e7ff-4380-8912-35b0c3f49690.png",
+    "destination": "/Users/jhonse48/Desktop/project/bangucheon-passport/public/images/characters/clear-landscape.png",
+    "mode": "built-in image_gen",
+    "transparent_background": true
+  },
+  {
+    "id": "three-scholars",
+    "prompt": "Use case: illustration-story. Asset type: standalone collectible mascot cutout for a Korean river heritage touring iPhone app, displayed at 80 pixels. Generate one original cute hand-drawn character, playful storybook doodle inspired by simple cartoon adventurers and black-outline character cards. Thick slightly wobbly dark olive/charcoal ink outlines, flat muted sage and olive green, warm ochre/tan, cream, small peach cheeks. Chubby proportions, large expressive head, minimal detail and clear silhouette legible at 80px. Centered isolated whole character occupying 85% of a square canvas. True transparent alpha background. Whole body and all accessories uncropped, with a small clear margin. No text, letters, signature, watermark, card, UI, scene, drop shadow, background circle, or 3D rendering. Subject: A cute cream owl scholar with a tiny olive traditional Korean scholar cap, holding an open blank book. Big circular eyes, rounded soft wings and tiny ochre feet, very simple friendly silhouette.",
+    "source": "/Users/jhonse48/.codex/generated_images/01a16c84-f19a-7133-97fa-2c86be732b8c/exec-d2280ae3-4918-42cb-9cf7-ebbe48ffc8bf.png",
+    "destination": "/Users/jhonse48/Desktop/project/bangucheon-passport/public/images/characters/three-scholars.png",
+    "mode": "built-in image_gen",
+    "transparent_background": true
+  },
+  {
+    "id": "poeun-landscape",
+    "prompt": "Use case: illustration-story. Asset type: standalone collectible mascot cutout for a Korean river heritage touring iPhone app, displayed at 80 pixels. Generate one original cute hand-drawn character, playful storybook doodle inspired by simple cartoon adventurers and black-outline character cards. Thick slightly wobbly dark olive/charcoal ink outlines, flat muted sage and olive green, warm ochre/tan, cream, small peach cheeks. Chubby proportions, large expressive head, minimal detail and clear silhouette legible at 80px. Centered isolated whole character occupying 85% of a square canvas. True transparent alpha background. Whole body and all accessories uncropped, with a small clear margin. No text, letters, signature, watermark, card, UI, scene, drop shadow, background circle, or 3D rendering. Subject: A round sage green friendly turtle carrying a small rocky mossy hill on its shell. Large round head, smiling dot eyes, small peach cheeks, stubby warm green feet and rounded shell; the moss hill is small and iconic, not realistic scenery.",
+    "source": "/Users/jhonse48/.codex/generated_images/01a16c84-f19a-7133-97fa-2c86be732b8c/exec-d8f6173d-1d22-4bdb-83bb-cb2a03484c9a.png",
+    "destination": "/Users/jhonse48/Desktop/project/bangucheon-passport/public/images/characters/poeun-landscape.png",
+    "mode": "built-in image_gen",
+    "transparent_background": true
+  },
+  {
+    "id": "pavilion-memory",
+    "prompt": "Use case: illustration-story. Asset type: standalone collectible mascot cutout for a Korean river heritage touring iPhone app, displayed at 80 pixels. Generate one original cute hand-drawn character, playful storybook doodle inspired by simple cartoon adventurers and black-outline character cards. Thick slightly wobbly dark olive/charcoal ink outlines, flat muted sage and olive green, warm ochre/tan, cream, small peach cheeks. Chubby proportions, large expressive head, minimal detail and clear silhouette legible at 80px. Centered isolated whole character occupying 85% of a square canvas. True transparent alpha background. Whole body and all accessories uncropped, with a small clear margin. No text, letters, signature, watermark, card, UI, scene, drop shadow, background circle, or 3D rendering. Subject: A tiny personified traditional Korean wooden pavilion. Simple curved tiled olive green roof as its hat, warm tan rounded wooden face and body, tiny feet and arms, happy dot eyes and peach cheeks, two simple posts frame its face. Recognizably a cute pavilion character with one face.",
+    "source": "/Users/jhonse48/.codex/generated_images/01a16c84-f19a-7133-97fa-2c86be732b8c/exec-effb4b18-6004-45f5-a539-d1d1d72a36f4.png",
+    "destination": "/Users/jhonse48/Desktop/project/bangucheon-passport/public/images/characters/pavilion-memory.png",
+    "mode": "built-in image_gen",
+    "transparent_background": true
+  },
+  {
+    "id": "stone-memory",
+    "prompt": "Use case: illustration-story. Asset type: standalone collectible mascot cutout for a Korean river heritage touring iPhone app, displayed at 80 pixels. Generate one original cute hand-drawn character, playful storybook doodle inspired by simple cartoon adventurers and black-outline character cards. Thick slightly wobbly dark olive/charcoal ink outlines, flat muted sage and olive green, warm ochre/tan, cream, small peach cheeks. Chubby proportions, large expressive head, minimal detail and clear silhouette legible at 80px. Centered isolated whole character occupying 85% of a square canvas. True transparent alpha background. Whole body and all accessories uncropped, with a small clear margin. No text, letters, signature, watermark, card, UI, scene, drop shadow, background circle, or 3D rendering. Subject: A rounded friendly upright standing stone mascot with a small olive scarf, a tiny muted ochre heart on its chest, light warm gray stone body, little moss cap, dot eyes, smile, peach cheeks and stubby feet.",
+    "source": "/Users/jhonse48/.codex/generated_images/01a16c84-f19a-7133-97fa-2c86be732b8c/exec-14a41d88-e943-4864-90dc-48be14402460.png",
+    "destination": "/Users/jhonse48/Desktop/project/bangucheon-passport/public/images/characters/stone-memory.png",
+    "mode": "built-in image_gen",
+    "transparent_background": true
+  },
+  {
+    "id": "old-road-record",
+    "prompt": "Use case: illustration-story. Asset type: standalone collectible mascot cutout for a Korean river heritage touring iPhone app, displayed at 80 pixels. Generate one original cute hand-drawn character, playful storybook doodle inspired by simple cartoon adventurers and black-outline character cards. Thick slightly wobbly dark olive/charcoal ink outlines, flat muted sage and olive green, warm ochre/tan, cream, small peach cheeks. Chubby proportions, large expressive head, minimal detail and clear silhouette legible at 80px. Centered isolated whole character occupying 85% of a square canvas. True transparent alpha background. Whole body and all accessories uncropped, with a small clear margin. No text, letters, signature, watermark, card, UI, scene, drop shadow, background circle, or 3D rendering. Subject: A cute plump warm tan hiking boot character with a friendly face and tiny arms holding a rolled cream trail map, a small sprout tucked by its cuff. Rounded toe and dark olive sole, simple olive laces, peach cheeks, smiling dot eyes.",
+    "source": "/Users/jhonse48/.codex/generated_images/01a16c84-f19a-7133-97fa-2c86be732b8c/exec-a88cbaac-7211-4442-a879-03e984a0691a.png",
+    "destination": "/Users/jhonse48/Desktop/project/bangucheon-passport/public/images/characters/old-road-record.png",
+    "mode": "built-in image_gen",
+    "transparent_background": true
+  }
+]

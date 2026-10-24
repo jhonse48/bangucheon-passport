@@ -44,5 +44,6 @@ final class MainViewController: CAPBridgeViewController {
         ])
         view = container
         bridge?.registerPluginInstance(NaverNativeMapPlugin())
+        bridge?.registerPluginInstance(JourneyNativePlugin())
     }
 }

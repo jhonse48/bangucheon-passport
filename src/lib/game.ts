@@ -8,6 +8,8 @@ interface BaseGameMission {
   explanation: string;
   collectionId: string;
   xp: number;
+  steps: [string, string, string];
+  observationHint: string;
 }
 export interface QuizGameMission extends BaseGameMission {
   kind: 'quiz';
@@ -16,11 +18,12 @@ export interface QuizGameMission extends BaseGameMission {
   correctIndex: number;
   qrCode: string;
   qrPayload: string;
-  sourceMissionId: string;
+  sourceMissionId?: string;
 }
 export interface PhotoGameMission extends BaseGameMission {
   kind: 'photo';
   subjects: string[];
+  notePlaceholder: string;
 }
 export type GameMission = QuizGameMission | PhotoGameMission;
 export type QuizMission = QuizGameMission;
@@ -45,7 +48,7 @@ export interface GameCompletion {
 export interface GameUnlock {
   missionId: string;
   unlockedAt: string;
-  source: 'app-qr';
+  source: 'app-qr' | 'guide-confirmation';
 }
 export interface GameSnapshot {
   unlockedQuizIds: string[];

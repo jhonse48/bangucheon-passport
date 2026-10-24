@@ -1,23 +1,27 @@
 'use client';
 
-import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import type { FormEvent } from 'react';
 import { LocateFixed, MapPin, Plus, Minus, Settings2, X, ExternalLink, RotateCcw } from 'lucide-react';
-import type { Place } from '@/lib/types';
+import type { Place, TourRoute } from '@/lib/types';
 import { getCurrentPosition } from '@/lib/native-device';
-import { getMapAnchor, loadNaverSDK, mapAnchorLabel, naverSearchUrl, REGION_MAP_REFERENCE, subscribeNaverAuthFailure, validMapPosition } from '@/lib/naver-map';
-import type { NaverMap, NaverMarker, NaverSDK } from '@/lib/naver-map';
+import { createNaverMapLifecycle, isNaverSDKUsable, getMapAnchor, getMapRoute, journeyMapBounds, journeyMapFocusKey, journeyMapSegments, mapOverlayPlacement, mapCameraIntent, mapMarkerDetails, mapPoints, mapRouteLine, mapRouteNotice, mapSceneKey, loadNaverSDK, mapAnchorLabel, naverSearchUrl, REGION_MAP_REFERENCE, subscribeNaverAuthFailure, validMapPosition } from '@/lib/naver-map';
+import type { JourneyMapLayer, MapCameraState, NaverMap, NaverMarker, NaverSDK } from '@/lib/naver-map';
 import styles from './tourism-map.module.css';
 import NativeTourismMap from './native-tourism-map';
-import { isNativeNaverMap } from '@/lib/native-naver-map';
+import { isNativeNaverMap, nativeMapLayout } from '@/lib/native-naver-map';
 
 export interface TourismMapProps {
   places: Place[];
   selectedPlaceId: string | null;
   completedPlaceIds?: string[];
   onSelect: (place: Place) => void;
+  onSelectGroup?: (places: Place[]) => void;
   className?: string;
   nativeMapHidden?: boolean;
+  route?: TourRoute | null;
+  journey?: JourneyMapLayer;
+  onSelectJourneyPhoto?: (id: string) => void;
 }
 const SESSION_KEY = 'bangucheon:naver-maps-client-id';
 const ENV_CLIENT_ID = process.env.NEXT_PUBLIC_NAVER_MAP_CLIENT_ID?.trim() ?? '';
@@ -26,13 +30,85 @@ const serverKey = () => '';
 function storedClientId() { try { return sessionStorage.getItem(SESSION_KEY) || ENV_CLIENT_ID; } catch { return ENV_CLIENT_ID; } }
 function subscribeKey(onChange: () => void) { window.addEventListener('storage', onChange); return () => window.removeEventListener('storage', onChange); }
 
+function fitScene(map: NaverMap, sdk: NaverSDK, points: { lat: number; lng: number }[]) {
+  const insetRegions = [...document.querySelectorAll('[data-native-map-inset]')].flatMap((element) => {
+    const edge = element.getAttribute('data-native-map-inset');
+    const rect = element.getBoundingClientRect();
+    return edge && ['top', 'right', 'bottom', 'left'].includes(edge) ? [{
+      rect: { x: rect.x, y: rect.y, width: rect.width, height: rect.height },
+      edge: edge as 'top' | 'right' | 'bottom' | 'left',
+    }] : [];
+  });
+  const layout = nativeMapLayout({ x: 0, y: 0, width: window.innerWidth, height: window.innerHeight }, [], insetRegions);
+  if (layout) map.setOptions({ padding: layout.contentInsets });
+  if (points.length > 1) map.fitBounds(points.map((point) => new sdk.maps.LatLng(point.lat, point.lng)), { top: 50, right: 50, bottom: 70, left: 50, maxZoom: 16 });
+  else { const center = points[0] ?? REGION_MAP_REFERENCE.position; map.setCenter(new sdk.maps.LatLng(center.lat, center.lng)); map.setZoom(14); }
+}
+
 const subscribePlatform = () => () => undefined;
+function useMapOverlayLayout(native: boolean) {
+  useLayoutEffect(() => {
+    const stage = document.querySelector<HTMLElement>('.map-stage');
+    const root = stage?.closest('.explorer');
+    const topBar = root?.querySelector<HTMLElement>('.map-top');
+    if (!stage || !root || !topBar) return;
+    const properties = ['--map-controls-top', '--map-empty-top', '--map-overlay-height', '--map-controls-columns'];
+    const previous = properties.map((property) => stage.style.getPropertyValue(property));
+    let frame = 0;
+    let signature = '';
+    const observed = new Set<Element>();
+    const update = () => {
+      const bounds = stage.getBoundingClientRect();
+      if (!bounds.width || !bounds.height) return;
+      const bottomRegions = [...root.querySelectorAll('[data-native-map-inset="bottom"],.map-side-actions')];
+      const footerTop = Math.min(bounds.bottom, ...bottomRegions.map((element) => element.getBoundingClientRect())
+        .filter((rect) => rect.width > 0 && rect.height > 0).map((rect) => rect.top));
+      const placement = mapOverlayPlacement(bounds, topBar.getBoundingClientRect().bottom, footerTop, native ? 3 : 5, window.innerWidth <= 600 ? 40 : 42);
+      const next = JSON.stringify(placement);
+      if (signature === next) return;
+      signature = next;
+      stage.style.setProperty('--map-controls-top', `${placement.top}px`);
+      stage.style.setProperty('--map-empty-top', `${placement.top}px`);
+      stage.style.setProperty('--map-overlay-height', `${placement.height}px`);
+      stage.style.setProperty('--map-controls-columns', String(placement.columns));
+    };
+    const schedule = () => { cancelAnimationFrame(frame); frame = requestAnimationFrame(update); };
+    const resize = new ResizeObserver(schedule);
+    const observe = () => {
+      const elements = new Set<Element>([stage, topBar, ...root.querySelectorAll('[data-native-map-inset="bottom"],.map-side-actions')]);
+      observed.forEach((element) => { if (!elements.has(element)) { resize.unobserve(element); observed.delete(element); } });
+      elements.forEach((element) => { if (!observed.has(element)) { resize.observe(element, { box: 'border-box' }); observed.add(element); } });
+    };
+    // Watch chrome and direct panel children, not the SDK's moving tile subtree.
+    const mutation = new MutationObserver(() => { observe(); observePanel(); schedule(); });
+    let panel: Element | null = null;
+    const observePanel = () => {
+      if (stage.firstElementChild && stage.firstElementChild !== panel) {
+        panel = stage.firstElementChild; mutation.observe(panel, { childList: true });
+      }
+    };
+    mutation.observe(stage, { childList: true });
+    mutation.observe(topBar, { childList: true, subtree: true, characterData: true });
+    observe(); observePanel(); update();
+    window.addEventListener('resize', schedule);
+    window.visualViewport?.addEventListener('resize', schedule);
+    window.visualViewport?.addEventListener('scroll', schedule);
+    return () => {
+      cancelAnimationFrame(frame); resize.disconnect(); mutation.disconnect();
+      window.removeEventListener('resize', schedule);
+      window.visualViewport?.removeEventListener('resize', schedule);
+      window.visualViewport?.removeEventListener('scroll', schedule);
+      properties.forEach((property, index) => { if (previous[index]) stage.style.setProperty(property, previous[index]); else stage.style.removeProperty(property); });
+    };
+  }, [native]);
+}
 export default function TourismMap(props: TourismMapProps) {
   const native = useSyncExternalStore(subscribePlatform, isNativeNaverMap, () => false);
+  useMapOverlayLayout(native);
   return native ? <NativeTourismMap {...props} /> : <WebTourismMap {...props} />;
 }
 
-function WebTourismMap({ places, selectedPlaceId, completedPlaceIds = EMPTY_IDS, onSelect, className = '' }: TourismMapProps) {
+function WebTourismMap({ places, selectedPlaceId, completedPlaceIds = EMPTY_IDS, onSelect, className = '', route = null, journey, onSelectJourneyPhoto }: TourismMapProps) {
   const storedKey = useSyncExternalStore(subscribeKey, storedClientId, serverKey);
   const [temporaryKey, setTemporaryKey] = useState<string | null>(null);
   const key = temporaryKey ?? storedKey;
@@ -50,17 +126,27 @@ function WebTourismMap({ places, selectedPlaceId, completedPlaceIds = EMPTY_IDS,
   const canvasRef = useRef<HTMLDivElement>(null);
   const settingsRef = useRef<HTMLDialogElement>(null);
   const mapRef = useRef<NaverMap | null>(null);
+  const lifecycleRef = useRef<ReturnType<typeof createNaverMapLifecycle> | null>(null);
   const userMarkerRef = useRef<NaverMarker | null>(null);
   const locationRequestRef = useRef(0);
   const onSelectRef = useRef(onSelect);
+  const onSelectJourneyPhotoRef = useRef(onSelectJourneyPhoto);
+  const journeyRef = useRef(journey);
+  const journeyFocusKey = journeyMapFocusKey(journey);
+  const cameraStateRef = useRef<MapCameraState | null>(null);
+  const routeModel = useMemo(() => getMapRoute(route), [route]);
+  const scenePoints = useMemo(() => routeModel?.points.length ? routeModel.points : mapPoints(places), [routeModel, places]);
+  const sceneKey = mapSceneKey(routeModel, scenePoints);
   const selected = places.find((place) => place.id === selectedPlaceId);
   const selectedAnchor = getMapAnchor(selected);
-  const selectionContext = `${selectedPlaceId ?? ''}:${places.map((place) => place.id).join(',')}`;
+  const selectionContext = `${selectedPlaceId ?? ''}:${sceneKey}`;
   const activeLocationContext = locationContext === selectionContext;
   const ready = Boolean(sdk && mapInitialized && !error);
 
-  useEffect(() => { onSelectRef.current = onSelect; }, [onSelect]);
-  useEffect(() => subscribeNaverAuthFailure((failure) => setError(failure.message)), []);
+  useEffect(() => { onSelectRef.current = onSelect; onSelectJourneyPhotoRef.current = onSelectJourneyPhoto; journeyRef.current = journey; }, [onSelect, onSelectJourneyPhoto, journey]);
+  useEffect(() => subscribeNaverAuthFailure((failure) => {
+    setError(failure.message); setSdk(null); setMapInitialized(false);
+  }), []);
   useEffect(() => {
     // The server renders the web shell before Capacitor's platform snapshot is
     // hydrated. Never start the JavaScript SDK on iOS during that transition.
@@ -72,13 +158,14 @@ function WebTourismMap({ places, selectedPlaceId, completedPlaceIds = EMPTY_IDS,
   }, [key, attempt]);
 
   useEffect(() => {
-    if (!sdk || !canvasRef.current) return;
+    if (!isNaverSDKUsable(sdk) || !canvasRef.current) return;
     const container = canvasRef.current;
     let cancelled = false;
     let map: NaverMap | null = null;
     let observer: ResizeObserver | null = null;
+    let lifecycle: ReturnType<typeof createNaverMapLifecycle> | null = null;
     void Promise.resolve().then(() => {
-      if (cancelled) return;
+      if (cancelled || !isNaverSDKUsable(sdk)) return;
       const center = REGION_MAP_REFERENCE.position;
       map = new sdk.maps.Map(container, {
       center: new sdk.maps.LatLng(center.lat, center.lng), zoom: 15, minZoom: 7, maxZoom: 20,
@@ -88,7 +175,11 @@ function WebTourismMap({ places, selectedPlaceId, completedPlaceIds = EMPTY_IDS,
       padding: { top: 120, right: 54, bottom: 240, left: 24 },
       });
       mapRef.current = map;
-      observer = new ResizeObserver(() => map?.autoResize());
+      lifecycle = createNaverMapLifecycle(sdk, map);
+      lifecycleRef.current = lifecycle;
+      lifecycle.add((usable) => { if (usable) userMarkerRef.current?.setMap(null); userMarkerRef.current = null; });
+      cameraStateRef.current = null;
+      observer = new ResizeObserver(() => { if (!cancelled && isNaverSDKUsable(sdk)) map?.autoResize(); });
       observer.observe(container);
       setMapInitialized(true);
     }).catch(() => {
@@ -98,30 +189,42 @@ function WebTourismMap({ places, selectedPlaceId, completedPlaceIds = EMPTY_IDS,
       cancelled = true;
       locationRequestRef.current += 1;
       observer?.disconnect();
-      userMarkerRef.current?.setMap(null);
-      map?.destroy();
-      mapRef.current = null;
+      lifecycle?.dispose();
+      if (lifecycleRef.current === lifecycle) lifecycleRef.current = null;
+      if (mapRef.current === map) mapRef.current = null;
+      container.replaceChildren();
     };
   }, [sdk]);
 
   useEffect(() => {
-    if (!sdk || !mapRef.current) return;
+    if (!isNaverSDKUsable(sdk) || !mapRef.current || !lifecycleRef.current) return;
     const markers: { marker: NaverMarker; listener: object; node: HTMLElement; keydown: (event: KeyboardEvent) => void }[] = [];
-    places.forEach((place, index) => {
+    places.forEach((place) => {
       const anchor = getMapAnchor(place);
       if (!anchor) return;
+      const detail = mapMarkerDetails(place.id, route);
       const node = document.createElement('button');
       node.type = 'button';
       node.className = `${styles.marker} ${place.id === selectedPlaceId ? styles.selectedMarker : ''} ${completedPlaceIds.includes(place.id) ? styles.completedMarker : ''}`;
-      node.setAttribute('aria-label', `${place.name}, ${mapAnchorLabel(anchor)}, 장소와 미션 보기`);
+      node.setAttribute('aria-label', `${detail.number ?? ""} ${place.name}, ${mapAnchorLabel(anchor)}, ${detail.qrLabel}, ${completedPlaceIds.includes(place.id) ? "미션 완료, " : ""}장소와 미션 보기`);
       const pin = document.createElement('span');
       pin.className = styles.pin;
-      pin.textContent = completedPlaceIds.includes(place.id) ? '✓' : String(index + 1).padStart(2, '0');
+      pin.textContent = detail.number === undefined ? '·' : String(detail.number).padStart(2, '0');
+      if (detail.qrStatus !== 'none') {
+        const qr = document.createElement('span');
+        qr.className = `${styles.qrBadge} ${detail.qrStatus === 'pending' ? styles.qrPending : ''}`;
+        qr.textContent = detail.qrStatus === 'ready' ? 'QR' : 'QR?';
+        qr.title = detail.qrLabel; pin.appendChild(qr);
+      }
+      if (completedPlaceIds.includes(place.id)) {
+        const check = document.createElement('span'); check.className = styles.completedBadge; check.textContent = '✓'; pin.appendChild(check);
+      }
       const label = document.createElement('span');
       label.className = styles.pinLabel;
       label.textContent = place.shortName;
       const kind = document.createElement('small');
-      kind.textContent = anchor.kind === 'heritage' ? '유산 위치' : anchor.kind === 'viewing' ? '관람 위치' : '공식 안내 위치';
+      kind.textContent = anchor.approximate ? '근사 위치' : anchor.kind === 'heritage' ? '유산 위치' : anchor.kind === 'viewing' ? '관람 위치' : '시설 위치';
+      if (place.id === selectedPlaceId && detail.qrLabel) kind.textContent += ` · ${detail.qrLabel}`;
       label.appendChild(kind);
       node.append(pin, label);
       const marker = new sdk.maps.Marker({
@@ -134,29 +237,80 @@ function WebTourismMap({ places, selectedPlaceId, completedPlaceIds = EMPTY_IDS,
       node.addEventListener('keydown', keydown);
       markers.push({ marker, listener, node, keydown });
     });
-    return () => markers.forEach(({ marker, listener, node, keydown }) => {
+    return lifecycleRef.current.add((usable) => markers.forEach(({ marker, listener, node, keydown }) => {
       node.removeEventListener('keydown', keydown);
-      sdk.maps.Event.removeListener(listener);
-      marker.setMap(null);
-    });
-  }, [sdk, mapInitialized, places, selectedPlaceId, completedPlaceIds]);
+      if (usable) { sdk.maps.Event.removeListener(listener); marker.setMap(null); }
+    }));
+  }, [sdk, mapInitialized, places, selectedPlaceId, completedPlaceIds, route]);
+
+  useEffect(() => {
+    if (!isNaverSDKUsable(sdk) || !mapRef.current || !lifecycleRef.current) return;
+    const line = mapRouteLine(routeModel);
+    if (!line) return;
+    const polyline = new sdk.maps.Polyline({ map: mapRef.current,
+      path: line.points.map((point) => new sdk.maps.LatLng(point.lat, point.lng)),
+      strokeWeight: 5, strokeColor: '#397c6b', strokeOpacity: 0.9,
+      strokeStyle: 'dash', strokeLineCap: 'round', clickable: false, zIndex: 1 });
+    return lifecycleRef.current.add((usable) => { if (usable) polyline.setMap(null); });
+  }, [sdk, mapInitialized, routeModel]);
 
   useEffect(() => {
     const requestId = ++locationRequestRef.current;
-    if (!sdk || !mapRef.current) return;
+    if (!isNaverSDKUsable(sdk) || !mapRef.current) return;
+    const state = { sceneKey, selectedId: selectedPlaceId };
+    const intent = mapCameraIntent(cameraStateRef.current, state);
+    cameraStateRef.current = state;
     userMarkerRef.current?.setMap(null);
-    const anchor = getMapAnchor(places.find((place) => place.id === selectedPlaceId));
-    if (anchor) mapRef.current.panTo(new sdk.maps.LatLng(anchor.position.lat, anchor.position.lng));
-    // Synchronize the GPS notice on the next map paint, while invalidating late readings immediately.
+    if (intent === 'fit') fitScene(mapRef.current, sdk, scenePoints);
+    else if (intent === 'select') {
+      const anchor = getMapAnchor(places.find((place) => place.id === selectedPlaceId));
+      if (anchor) mapRef.current.panTo(new sdk.maps.LatLng(anchor.position.lat, anchor.position.lng));
+    }
     const frame = requestAnimationFrame(() => {
       if (requestId !== locationRequestRef.current) return;
-      setLocating(false);
-      setLocationMode(false);
-      setLocationMessage('');
-      setLocationContext(null);
+      setLocating(false); setLocationMode(false); setLocationMessage(''); setLocationContext(null);
     });
     return () => cancelAnimationFrame(frame);
-  }, [sdk, mapInitialized, places, selectedPlaceId]);
+  }, [sdk, mapInitialized, places, selectedPlaceId, sceneKey, scenePoints]);
+
+  useEffect(() => {
+    if (!isNaverSDKUsable(sdk) || !mapRef.current || !lifecycleRef.current || !journey) return;
+    const map = mapRef.current;
+    const lines = journeyMapSegments(journey.points).map((segment) => new sdk.maps.Polyline({ map,
+      path: segment.map((point) => new sdk.maps.LatLng(point.lat, point.lng)),
+      strokeWeight: 5, strokeColor: '#e5694f', strokeOpacity: 0.95,
+      strokeStyle: 'solid', strokeLineCap: 'round', clickable: false, zIndex: 3 }));
+    const photos = journey.photos.filter(validMapPosition).map((photo, index) => {
+      const node = document.createElement('button');
+      node.type = 'button'; node.className = styles.journeyPhoto;
+      node.setAttribute('aria-label', `여행 사진 ${index + 1} 보기`);
+      if (photo.thumbnailUrl.startsWith('data:image/jpeg;base64,')) {
+        const thumbnail = document.createElement('img');
+        thumbnail.src = photo.thumbnailUrl; thumbnail.alt = ''; node.appendChild(thumbnail);
+      } else node.textContent = '사진';
+      const marker = new sdk.maps.Marker({ map, position: new sdk.maps.LatLng(photo.lat, photo.lng),
+        title: `여행 사진 ${index + 1}`, zIndex: 35, icon: { content: node, anchor: new sdk.maps.Point(26, 52) } });
+      const open = () => onSelectJourneyPhotoRef.current?.(photo.id);
+      const listener = sdk.maps.Event.addListener(marker, 'click', open);
+      const keydown = (event: KeyboardEvent) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); open(); } };
+      node.addEventListener('keydown', keydown);
+      return { marker, listener, node, keydown };
+    });
+    return lifecycleRef.current.add((usable) => {
+      if (usable) lines.forEach((line) => line.setMap(null));
+      photos.forEach(({ marker, listener, node, keydown }) => {
+        node.removeEventListener('keydown', keydown);
+        if (usable) { sdk.maps.Event.removeListener(listener); marker.setMap(null); }
+      });
+    });
+  }, [sdk, mapInitialized, journey]);
+
+  // A new GPS sample updates overlays only. Review focus is an explicit transition.
+  useEffect(() => {
+    if (!journeyFocusKey || !isNaverSDKUsable(sdk) || !mapRef.current || !journeyRef.current) return;
+    const points = journeyMapBounds(journeyRef.current);
+    if (points.length) fitScene(mapRef.current, sdk, points);
+  }, [sdk, mapInitialized, journeyFocusKey]);
 
   useEffect(() => {
     const dialog = settingsRef.current;
@@ -165,14 +319,14 @@ function WebTourismMap({ places, selectedPlaceId, completedPlaceIds = EMPTY_IDS,
   }, [settingsOpen]);
 
   async function locateMe() {
-    if (!sdk || !mapRef.current) return;
+    if (!isNaverSDKUsable(sdk) || !mapRef.current) return;
     const requestId = ++locationRequestRef.current;
     setLocationContext(selectionContext);
     setLocating(true);
     setLocationMessage('현재 위치를 확인하고 있어요…');
     try {
       const position = await getCurrentPosition();
-      if (requestId !== locationRequestRef.current || !mapRef.current) return;
+      if (requestId !== locationRequestRef.current || !isNaverSDKUsable(sdk) || !mapRef.current) return;
       if (!validMapPosition({ lat: position.latitude, lng: position.longitude })) throw new Error('기기에서 유효한 위치를 받지 못했어요. 장소를 직접 선택해 주세요.');
       const current = new sdk.maps.LatLng(position.latitude, position.longitude);
       const node = document.createElement('div');
@@ -188,13 +342,14 @@ function WebTourismMap({ places, selectedPlaceId, completedPlaceIds = EMPTY_IDS,
     } finally { if (requestId === locationRequestRef.current) setLocating(false); }
   }
   function returnToPlace() {
-    if (!sdk || !mapRef.current) return;
+    if (!isNaverSDKUsable(sdk) || !mapRef.current) return;
     locationRequestRef.current += 1;
     setLocating(false);
     setLocationMode(false);
     setLocationMessage('');
-    const center = selectedAnchor?.position ?? REGION_MAP_REFERENCE.position;
-    mapRef.current.panTo(new sdk.maps.LatLng(center.lat, center.lng));
+    userMarkerRef.current?.setMap(null);
+    if (selectedAnchor) mapRef.current.panTo(new sdk.maps.LatLng(selectedAnchor.position.lat, selectedAnchor.position.lng));
+    else fitScene(mapRef.current, sdk, scenePoints);
   }
   function applyClientId(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -202,7 +357,7 @@ function WebTourismMap({ places, selectedPlaceId, completedPlaceIds = EMPTY_IDS,
     if (!next || /\s/.test(next)) { setSettingsMessage('공백 없이 Maps의 Client ID를 입력해 주세요.'); return; }
     let saved = true;
     try { sessionStorage.setItem(SESSION_KEY, next); } catch { saved = false; }
-    if (key && (next !== key || sdk)) {
+    if (key) {
       if (saved) window.location.reload();
       else setSettingsMessage('이 탭의 저장이 제한되어 키를 변경하지 못했습니다. 브라우저 저장 설정을 확인해 주세요.');
       return;
@@ -230,7 +385,7 @@ function WebTourismMap({ places, selectedPlaceId, completedPlaceIds = EMPTY_IDS,
         <button type="button" aria-label="선택 장소로 돌아가기" title="선택 장소로 돌아가기" onClick={returnToPlace}><RotateCcw size={18}/></button>
         <button type="button" aria-label="네이버 지도 설정" onClick={() => setSettingsOpen(true)}><Settings2 size={18}/></button>
       </div>
-      <div className={styles.mapNotice} role="status">{(activeLocationContext && locationMessage) || (selected && !selectedAnchor ? '선택 장소의 좌표는 확인 중입니다. 장소 안내와 네이버 검색을 이용해 주세요.' : selectedAnchor ? mapAnchorLabel(selectedAnchor) : '울산시 관광안내 대표 위치 · 지정 관람로를 이용해 주세요.')}{locationMode && activeLocationContext && <button type="button" onClick={returnToPlace}>장소로 복귀</button>}</div>
+      <div className={styles.mapNotice} data-native-map-inset="bottom" role="status">{(activeLocationContext && locationMessage) || (selected && !selectedAnchor ? '선택 장소의 좌표는 확인 중입니다. 장소 안내와 네이버 검색을 이용해 주세요.' : selectedAnchor ? mapAnchorLabel(selectedAnchor) : '장소 번호 · QR?는 안내판 위치 확인 중 · 지정 관람로 이용')}{routeModel && <span className={styles.routeNotice}>{mapRouteNotice(routeModel)}</span>}{locationMode && activeLocationContext && <button type="button" onClick={returnToPlace}>장소로 복귀</button>}</div>
     </>}
     <dialog ref={settingsRef} className={styles.settings} aria-label="네이버 지도 연결 설정" onCancel={() => setSettingsOpen(false)} onClick={(event) => { if (event.target === event.currentTarget) setSettingsOpen(false); }}>
       <div className={styles.settingsHeader}><strong>네이버 지도 연결</strong><button type="button" aria-label="지도 설정 닫기" onClick={() => setSettingsOpen(false)}><X size={20}/></button></div>

@@ -1,5 +1,7 @@
 import { Capacitor, registerPlugin } from '@capacitor/core';
 import type { PluginListenerHandle } from '@capacitor/core';
+import { validJourneyMapPoint, validMapPosition } from './naver-map';
+import type { JourneyMapLayer, JourneyMapPoint } from './naver-map';
 
 export interface NativeMapRect { x: number; y: number; width: number; height: number }
 export interface NativeMapPosition { lat: number; lng: number }
@@ -9,9 +11,24 @@ export interface NativeMapMarker extends NativeMapPosition {
   id: string;
   title: string;
   label: string;
-  kind: 'viewing' | 'heritage' | 'facility' | 'location';
+  kind: 'viewing' | 'heritage' | 'facility' | 'approximate' | 'location';
   completed: boolean;
   selected: boolean;
+  number?: number;
+  qrStatus?: 'ready' | 'pending' | 'none';
+  approximate?: boolean;
+}
+export interface NativeMapRoute {
+  id: string;
+  points: NativeMapPosition[];
+  kind: 'walking' | 'visit-order';
+}
+export interface NativeMapBounds { points: NativeMapPosition[]; padding?: number }
+export interface JourneySnapshotPhoto extends NativeMapPosition { id: string }
+export interface JourneyMapSnapshot {
+  dataUrl: string;
+  points: { x: number; y: number; segment: number }[];
+  photos: { id: string; x: number; y: number }[];
 }
 export interface NativeMapUpdate {
   rect?: NativeMapRect;
@@ -21,12 +38,18 @@ export interface NativeMapUpdate {
   webTouchRects?: NativeMapRect[];
   interactionEnabled?: boolean;
   contentInsets?: NativeMapInsets;
+  route?: NativeMapRoute | null;
+  fitBounds?: NativeMapBounds;
+  journey?: Omit<JourneyMapLayer, 'focus'> | null;
 }
 export interface NativeNaverMapPlugin {
-  create(options: Required<NativeMapUpdate> & { clientId: string; visible: boolean }): Promise<void>;
+  create(options: Required<Omit<NativeMapUpdate, 'route' | 'fitBounds' | 'journey'>> & Pick<NativeMapUpdate, 'route' | 'fitBounds' | 'journey'> & { clientId: string; visible: boolean }): Promise<void>;
   update(options: NativeMapUpdate): Promise<void>;
   setVisible(options: { visible: boolean }): Promise<void>;
   destroy(): Promise<void>;
+  captureJourneySnapshot(options: { points: JourneyMapPoint[]; photos: JourneySnapshotPhoto[] }): Promise<JourneyMapSnapshot>;
+  addListener(event: 'photoTap', listener: (event: { id: string }) => void): Promise<PluginListenerHandle>;
+  addListener(event: 'clusterTap', listener: (event: { ids: string[] }) => void): Promise<PluginListenerHandle>;
   addListener(event: 'markerTap', listener: (event: { id: string }) => void): Promise<PluginListenerHandle>;
   addListener(event: 'authState', listener: (event: { authorized: boolean; code?: number; message?: string }) => void): Promise<PluginListenerHandle>;
   addListener(event: 'mapReady', listener: () => void): Promise<PluginListenerHandle>;
@@ -34,12 +57,29 @@ export interface NativeNaverMapPlugin {
 export const NaverNativeMap = registerPlugin<NativeNaverMapPlugin>('NaverNativeMap');
 export const isNativeNaverMap = () => Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'ios';
 
+/** Resolve delayed native group events against the currently visible place list. */
+export function resolveNativeMapSelection<T extends { id: string }>(places: readonly T[], ids: unknown): T[] {
+  if (!Array.isArray(ids)) return [];
+  const selectedIds = new Set(ids.filter((id): id is string => typeof id === 'string'));
+  return places.filter((place) => selectedIds.has(place.id));
+}
+
 // Keep native create/update/destroy ordered across React effect cleanup/remounts.
 let nativeQueue: Promise<unknown> = Promise.resolve();
 export function runNativeMapTask<T>(operation: () => Promise<T>): Promise<T> {
   const task = nativeQueue.then(operation, operation);
   nativeQueue = task.catch(() => undefined);
   return task;
+}
+
+/** Only an explicitly selected trip is sent to the SDK; never the device location overlay. */
+export async function captureJourneyMapSnapshot(points: JourneyMapPoint[], photos: JourneySnapshotPhoto[]): Promise<JourneyMapSnapshot> {
+  if (!isNativeNaverMap()) throw new Error('지도 영상 캡처는 iPhone 앱에서 사용할 수 있습니다.');
+  if ((!points.length && !photos.length) || !points.every(validJourneyMapPoint)
+    || !photos.every((photo) => Boolean(photo.id) && validMapPosition(photo))) {
+    throw new Error('지도에 표시할 여행 좌표를 확인해 주세요.');
+  }
+  return runNativeMapTask(() => NaverNativeMap.captureJourneySnapshot({ points, photos: photos.map(({ id, lat, lng }) => ({ id, lat, lng })) }));
 }
 
 function usableRect(rect: NativeMapRect): boolean {

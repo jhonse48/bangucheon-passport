@@ -5,18 +5,23 @@ import { gameMissions, photoMissions, quizMissions } from '../src/data/game-miss
 import { assertQuizAnswer, getQrInputCode, getQrPayload, makeCompletion, parseQrPayload, summarizeGame, validatePhotoSubmission } from '../src/lib/game';
 import type { GameCompletion, PhotoSubmission } from '../src/lib/game';
 
-test('game has six source-backed QR quizzes and three optional observation photo missions', () => {
-  assert.equal(quizMissions.length, 6);
+test('all thirteen stops have a guide quiz and three optional observation photo missions', () => {
+  assert.equal(quizMissions.length, 13);
   assert.equal(photoMissions.length, 3);
-  assert.equal(new Set(gameMissions.map((mission) => mission.id)).size, 9);
-  assert.equal(new Set(quizMissions.map((mission) => mission.qrCode)).size, 6);
-  assert.equal(new Set(quizMissions.map((mission) => mission.placeId)).size, 6);
+  assert.equal(new Set(gameMissions.map((mission) => mission.id)).size, 16);
+  assert.equal(new Set(quizMissions.map((mission) => mission.qrCode)).size, 13);
+  assert.equal(new Set(quizMissions.map((mission) => mission.placeId)).size, 13);
   for (const mission of gameMissions) {
-    assert.ok(places.find((place) => place.id === mission.placeId)?.pilot);
+    assert.ok(places.find((place) => place.id === mission.placeId));
+    assert.equal(mission.steps.length, 3);
+    assert.ok(mission.steps.every((step) => step.trim().length > 8));
+    assert.ok(mission.observationHint.trim());
     assert.ok(collectionItems.some((item) => item.id === mission.collectionId));
     assert.ok(Number.isInteger(mission.xp) && mission.xp > 0);
   }
   for (const mission of quizMissions) {
+    assert.ok(Number.isInteger(mission.correctIndex) && mission.correctIndex >= 0 && mission.correctIndex < mission.options.length);
+    if (!mission.sourceMissionId) continue;
     const source = missions.find((item) => item.id === mission.sourceMissionId)!;
     assert.equal(mission.question, source.question);
     assert.deepEqual(mission.options, source.options);
@@ -63,7 +68,7 @@ test('photo completion requires a real nonempty image Blob, allowed subject and 
   assert.throws(() => validatePhotoSubmission(mission, { ...valid, note: '가'.repeat(2001) }), { code: 'INVALID_NOTE' });
 });
 
-test('XP, levels, six-place stamps and collections derive from unique known missions', () => {
+test('XP, levels and thirteen-place collections derive from unique known missions', () => {
   const records: Record<string, GameCompletion> = {};
   assert.equal(summarizeGame(records).level, 1);
   assert.equal(summarizeGame(records).levelProgress, 0);
@@ -78,13 +83,13 @@ test('XP, levels, six-place stamps and collections derive from unique known miss
   assert.equal(summary.stampPlaceIds.length, 1);
   for (const mission of gameMissions) records[mission.id] = makeCompletion(mission);
   summary = summarizeGame(records);
-  assert.equal(summary.xp, 840);
+  assert.equal(summary.xp, 1400);
   assert.equal(summary.level, 5);
   assert.equal(summary.levelProgress, 100);
   assert.equal(summary.nextLevelXp, null);
-  assert.equal(summary.completedCount, 9);
-  assert.equal(summary.quizCount, 6);
+  assert.equal(summary.completedCount, 16);
+  assert.equal(summary.quizCount, 13);
   assert.equal(summary.photoCount, 3);
-  assert.equal(summary.stampPlaceIds.length, 6);
-  assert.equal(summary.collectionIds.length, 6);
+  assert.equal(summary.stampPlaceIds.length, 13);
+  assert.equal(summary.collectionIds.length, 13);
 });

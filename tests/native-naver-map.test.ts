@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { nativeMapLayout, runNativeMapTask } from '../src/lib/native-naver-map';
+import { nativeMapLayout, resolveNativeMapSelection, runNativeMapTask } from '../src/lib/native-naver-map';
 
 test('native tiles fill the viewport while HTML overlays retain separate touch regions', () => {
   const bounds = { x: 0, y: 0, width: 390, height: 844 };
@@ -87,4 +87,13 @@ test('native lifecycle operations remain ordered after an earlier bridge failure
   release();
   await Promise.all([creating, rejection, destroying]);
   assert.deepEqual(events, ['create', 'created', 'update', 'destroy']);
+});
+
+
+test('native cluster selection keeps current route order and ignores stale or duplicate IDs', () => {
+  const visible = [{ id: 'museum' }, { id: 'poeundae' }, { id: 'memorial' }];
+  assert.deepEqual(resolveNativeMapSelection(visible, ['memorial', 'poeundae', 'poeundae', 'hidden-place', '__current_location']), [visible[1], visible[2]]);
+  assert.deepEqual(resolveNativeMapSelection(visible.slice(0, 1), ['poeundae', 'memorial']), []);
+  assert.deepEqual(resolveNativeMapSelection(visible, null), []);
+  assert.deepEqual(resolveNativeMapSelection(visible, [42, 'museum']), [visible[0]]);
 });
